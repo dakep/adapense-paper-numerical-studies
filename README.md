@@ -1,5 +1,7 @@
 # Numerical Studies for Paper "Robust Variable Selection and Estimation Via Adaptive Elastic Net S-Estimators for Linear Regression"
 
+[![DOI](https://zenodo.org/badge/387899778.svg)](https://zenodo.org/badge/latestdoi/387899778)
+
 This repository contains all necessary code and data to reproduce the results in "Robust Variable Selection and Estimation Via Adaptive Elastic Net S-Estimators for Linear Regression".
 
 Re-computing all results takes about 33,000 CPU hours when using an R build linked to an optimized BLAS/LAPACK library (e.g., Intel® MKL).
