@@ -158,5 +158,5 @@ or, when using the RStudio IDE, press the "Knit" button.
 
 ## License
 
-The code and files in this repository are published under the [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) license.
+The code and derived files in this repository are © David Kepplinger (2021) and published under the [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) license.
 See file [*LICENSE*](./LICENSE) for details.
