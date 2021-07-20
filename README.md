@@ -161,4 +161,7 @@ or, when using the RStudio IDE, press the "Knit" button.
 ## License
 
 The code and derived files in this repository are © David Kepplinger (2021) and published under the [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) license.
+
+The file *renv/active.R* is © RStudio, PBC (2021) and distributed under the MIT License
+
 See file [*LICENSE*](./LICENSE) for details.
