@@ -1,0 +1,635 @@
+---
+title: "Results from the Simulation Study"
+author: "David Kepplinger"
+output:
+  html_document:
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(kableExtra)
+library(gridExtra)
+library(purrr)
+library(forcats)
+library(ggplot2)
+library(stringr)
+library(pense)
+library(magrittr)
+source('utilities-plotting.R')
+
+RESULTS_PATH <- file.path('results', 'simstudy')
+FIGURE_PATH <- file.path('figures')
+
+custom_pdf <- function (filename, width, height) {
+  pdf_fun <- if (exists('cairo_pdf', mode = 'function')) {
+    cairo_pdf
+  } else {
+    pdf
+  }
+  if (!dir.exists(FIGURE_PATH)) {
+    dir.create(FIGURE_PATH)
+  }
+  fname <- file.path(FIGURE_PATH, paste0('simstudy-', basename(filename)))
+  fname <- str_replace(fname, fixed('-1.pdf'), '.pdf')
+  pdf_fun(filename = fname, width = width, height = height)
+}
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      dev = c('png', 'custom_pdf'),
+                      fig.ext = c('png', 'pdf'))
+
+## Helper functions
+`%||%` <- function (x, y) {
+  if (is.null(x)) {
+    y
+  } else {
+    x
+  }
+}
+
+varsel_stats <- function (beta, job) {
+  true_beta <- job$true_beta
+  cont_pred_bad <- job$cont_pred_bad
+  cont_pred_good <- job$cont_pred_good
+  
+  nnz_ind <- if (is(beta, 'dsparseVector')) {
+    beta@i
+  } else {
+    which(abs(beta) > .Machine$double.eps)
+  }
+  
+  all_cont_pred <- c(cont_pred_bad %||% integer(), cont_pred_good %||% integer())
+  cont_pred_relevant <- true_beta@i[which(match(true_beta@i, all_cont_pred, 0L) > 0L)]
+  cont_pred_irrelevant <- all_cont_pred[which(match(all_cont_pred, true_beta@i, 0L) == 0L)]
+  
+  fp_cont <- sum(match(nnz_ind, cont_pred_irrelevant, nomatch = 0L) > 0L)
+  fn_cont <- sum(match(cont_pred_relevant, nnz_ind, nomatch = 0L) == 0L)
+  tp_cont <- length(cont_pred_relevant) - fn_cont
+  tn_cont <- length(cont_pred_irrelevant) - fp_cont
+  
+  pos_match <- match(nnz_ind, true_beta@i, nomatch = 0L)
+  tp <- sum(pos_match > 0L)
+  fp <- sum(pos_match == 0L)
+  fn <- sum(match(true_beta@i, nnz_ind, nomatch = 0L) == 0L)
+  tn <- true_beta@length - length(true_beta@i) - fp
+  
+  mcc_numerator <- tp * tn - fp * fn
+  mcc <- ifelse(abs(mcc_numerator) < .Machine$double.eps, 0,
+                mcc_numerator / sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)))
+  
+  c(sens = tp / (tp + fn), 
+    spec = tn / (tn + fp),
+    sens_cont = tp_cont / length(cont_pred_relevant),
+    spec_cont = tn_cont / length(cont_pred_irrelevant),
+    sens_not_cont = (tp - tp_cont) / (tp + fn - length(cont_pred_relevant)),
+    spec_not_cont = (tn - tn_cont) / (tn + fp - length(cont_pred_irrelevant)),
+    mcc = mcc,
+    nnz = length(nnz_ind))
+}
+
+extract_estimate_stats <- function (estimates, job, .id = NULL) {
+  map2_dfr(estimates, names(estimates), function (x, suffix) {
+    .id <- if (!is.null(.id)) {
+      if (is.list(x) || is.null(x)) {
+        paste(.id, suffix, sep = '_')
+      } else {
+        .id
+      }
+    } else {
+      suffix
+    }
+    
+    if (is.list(x)) {
+      if (is.null(x$test_pred_err)) {
+        extract_estimate_stats(x, job = job, .id = .id)
+      } else {
+        tibble(method = .id, 
+               pred_err_tau_size = x$test_pred_err_tau_size %||% NA_real_,
+               pred_err_rmspe = sqrt(mean(x$test_pred_err^2)) %||% NA_real_,
+               zeta = x$zeta %||% NA_real_,
+               alpha = x$alpha %||% NA_real_, 
+               bdp = x$bdp %||% NA_real_,
+               varsel = list(varsel_stats(x$beta, job)))
+      }
+    } else {
+      tibble(method = .id, 
+             pred_err_tau_size = NA_real_,
+             pred_err_rmspe = NA_real_,
+             zeta = NA_real_,
+             alpha = NA_real_, 
+             bdp = NA_real_,
+             varsel = list(NULL))
+    }
+  })
+}
+
+load_results <- function (path, s_fun) {
+  list.files(path, full.names = TRUE, pattern = '.rds') %>%
+    map_dfr(function (fname) {
+      job_res <- readRDS(fname)
+      
+      tibble(seed = job_res$seed,
+             p = job_res$settings$p,
+             s = floor(job_res$settings$s),
+             resid_dist = job_res$settings$resid_dist,
+             bad_lev_pos = job_res$settings$bad_lev_pos,
+             good_lev_pos = job_res$settings$good_lev_pos,
+             cont = job_res$settings$cont,
+             scale_true = job_res$true_sd) %>% 
+        cbind(extract_estimate_stats(job_res$estimates, job = job_res))
+    }) %>% 
+    arrange(p) %>% 
+    mutate(cont = recode_cont(cont),
+           p_s_str = fct_inorder(sprintf('%d (%d)', p, s)),
+           method = str_replace(method, fixed('cv_'), ''),
+           cv_type = str_extract(method, '(se|min)$'),
+           method = str_remove(method, '_(se|min)$'),
+           method = recode_method(method),
+           resid_dist = recode_resid_dist(resid_dist)) %>%
+    filter(!is.na(method)) %>% 
+    unnest_wider(varsel)
+}
+
+any_missing <- function (have, wanted, what) {
+  missing <- which(match(wanted, have, nomatch = 0L) == 0L) 
+  if (length(missing) > 0L) {
+    warning(sprintf("Missing settings for `%s`: %s", what, paste(wanted[missing], collapse = ', ')))
+  }
+}
+
+plot_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg = median) {
+  if (missing(guide)) {
+    guide <- guide_legend(title = 'Method',
+                          nrow = 1,
+                          keyheight = grid::unit(1.6, 'lines'),
+                          title.theme = element_text(face = 'bold', size = 9))
+  }
+  
+  avg <- match.fun(avg)
+  plot_d <- droplevels(plot_d)
+  
+  minor_x_breaks <- if (nlevels(plot_d$p_s_str) > 1L) {
+    seq(1.5, nlevels(plot_d$p_s_str) - 0.5, by = 1)
+  } else {
+    numeric(0L)
+  }
+  
+  plot_obj <- plot_d %>% 
+    mutate(pred_err = if_else(str_detect(resid_dist, 'Normal'),
+                              pred_err_rmspe, pred_err_tau_size)) %>% 
+    ggplot(aes(x = as.integer(p_s_str), y = pred_err_tau_size / scale_true,
+               color = method, shape = method, fill = method)) +
+    geom_point(position = position_dodge(width = 0.8),
+               size = 1/3, alpha = 1/3) +
+    geom_point(size = 2.5, position = position_dodge(width = 0.8), stat = 'summary',
+               fun.data = function (x) {
+                 data.frame(y = avg(x))
+               }) +
+    geom_errorbar(size = 2/3, width = 0.5,
+                  position = position_dodge(width = 0.8), stat = 'summary',
+                  fun.data = function (x) {
+                    q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
+                    data.frame(ymin = q[[1L]], ymax = q[[2L]])
+                  }) +
+    coord_cartesian(ylim = ylim) +
+    scale_color_colorblind(guide = guide, values = STYLE_COLOR,
+                           breaks = levels(plot_d$method)) +
+    scale_fill_colorblind(guide = guide, values = STYLE_COLOR,
+                           breaks = levels(plot_d$method)) +
+    scale_shape_manual(guide = guide, values = STYLE_SHAPE,
+                       breaks = levels(plot_d$method)) +
+    scale_x_continuous(minor_breaks = minor_x_breaks,
+                       breaks = seq_len(nlevels(plot_d$p_s_str)),
+                       labels = levels(plot_d$p_s_str)) +
+    facet_grid(cols = vars(cont), rows = vars(resid_dist), scale = 'free') +
+    labs(x = "Number of predictors (thereof active)",
+         y = "Relative scale of the prediction error") +
+    ggplot_theme(base_size = 12) +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
+          axis.ticks.x = element_blank(),
+          legend.position = 'bottom')
+  
+  plot_obj
+}
+
+plot_relative_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg = median,
+                                     baseline = 'Ada. PENSE') {
+  if (missing(guide)) {
+    guide <- guide_legend(title = 'Method',
+                          nrow = 1,
+                          keyheight = grid::unit(1.6, 'lines'),
+                          title.theme = element_text(face = 'bold', size = 9))
+  }
+  
+  avg <- match.fun(avg)
+
+  plot_d <- plot_d %>% 
+    mutate(pred_err = if_else(str_detect(resid_dist, 'Normal'),
+                              pred_err_rmspe, pred_err_tau_size)) %>% 
+    group_by(p_s_str, cont, resid_dist, seed) %>% 
+    mutate(pred_err_diff = pred_err / c(pred_err[method == baseline], NA_real_)[[1L]],
+           pred_err_diff = if_else(pred_err_diff < 1, - 1 / pred_err_diff + 1,
+                                   pred_err_diff - 1)) %>% 
+    filter(method != baseline, !is.na(pred_err_diff)) %>% 
+    droplevels()
+  
+  minor_x_breaks <- if (nlevels(plot_d$p_s_str) > 1L) {
+    seq(1.5, nlevels(plot_d$p_s_str) - 0.5, by = 1)
+  } else {
+    numeric(0L)
+  }
+  
+  plot_obj <- ggplot(plot_d, aes(x = as.integer(p_s_str), y = pred_err_diff,
+                                 color = method, shape = method, fill = method)) +
+    geom_hline(yintercept = 0, color = colorblind_cols(STYLE_COLOR[baseline]), 
+               linetype = '22', size = 0.5) +
+    geom_point(position = position_dodge(width = 0.8),
+               size = 1/2, alpha = 2/3) +
+    geom_point(size = 2.5, position = position_dodge(width = 0.8), stat = 'summary',
+               fun.data = function (x) {
+                 data.frame(y = avg(x))
+               }) +
+    geom_errorbar(size = 2/3, width = 0.5,
+                  position = position_dodge(width = 0.8), stat = 'summary',
+                  fun.data = function (x) {
+                    q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
+                    data.frame(ymin = q[[1L]], ymax = q[[2L]])
+                  }) +
+    coord_cartesian(ylim = ylim) +
+    scale_color_colorblind(guide = guide, values = STYLE_COLOR,
+                           breaks = levels(plot_d$method)) +
+    scale_fill_colorblind(guide = guide, values = STYLE_COLOR,
+                          breaks = levels(plot_d$method)) +
+    scale_shape_manual(guide = guide, values = STYLE_SHAPE,
+                       breaks = levels(plot_d$method)) +
+    scale_x_continuous(minor_breaks = minor_x_breaks,
+                       breaks = seq_len(nlevels(plot_d$p_s_str)),
+                       labels = levels(plot_d$p_s_str)) +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 1), 
+                       breaks = seq(ylim[[1]], ylim[[2]], by = 0.1)) +
+    facet_grid(cols = vars(cont), rows = vars(resid_dist), scale = 'free') +
+    labs(x = "Number of predictors (thereof active)",
+         y = sprintf("Difference in prediction accuracy\nrelative to the accuracy of %s", baseline)) +
+    ggplot_theme(base_size = 12) +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
+          axis.ticks.x = element_blank(),
+          legend.position = 'bottom')
+  
+  plot_obj
+}
+
+plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE, base_size = 12,
+                          conf_level = 0.5, avg = median) {
+  if (missing(guide)) {
+    guide <- guide_legend(title = 'Method',
+                          nrow = 1,
+                          keyheight = grid::unit(1.6, 'lines'),
+                          title.theme = element_text(face = 'bold', size = 9))
+  }
+  
+  avg <- match.fun(avg)
+  plot_d <- droplevels(plot_d)
+  
+  minor_x_breaks <- if (nlevels(plot_d$p_s_str) > 1L) {
+    seq(1.5, nlevels(plot_d$p_s_str) - 0.5, by = 1)
+  } else {
+    numeric(0L)
+  }
+  
+  y_axis <- if (isTRUE(pct)) {
+    scale_y_continuous(labels = scales::label_percent())
+  } else {
+    scale_y_continuous()
+  }
+  
+  ggplot(plot_d, aes(x = as.integer(p_s_str), y = {{ what }},
+                     color = method, shape = method)) +
+    geom_point(position = position_dodge(width = 0.8),
+               size = 1/3, alpha = 1/3) +
+    geom_point(size = 2.5, position = position_dodge(width = 0.8), stat = 'summary',
+               fun.data = function (x) {
+                 data.frame(y = avg(x))
+               }) +
+    geom_errorbar(size = 2/3, width = 0.5,
+                  position = position_dodge(width = 0.8), stat = 'summary',
+                  fun.data = function (x) {
+                    q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
+                    data.frame(ymin = q[[1L]], ymax = q[[2L]])
+                  }) +
+    y_axis +
+    scale_color_colorblind(guide = guide, values = STYLE_COLOR,
+                           breaks = levels(plot_d$method)) +
+    scale_shape_manual(guide = guide, values = STYLE_SHAPE,
+                       breaks = levels(plot_d$method)) +
+    scale_x_continuous(minor_breaks = minor_x_breaks,
+                       breaks = seq_len(nlevels(plot_d$p_s_str)),
+                       labels = levels(plot_d$p_s_str)) +
+    facet_grid(cols = vars(cont), rows = vars(resid_dist), scale = 'free') +
+    labs(x = "Number of predictors (thereof active)",
+         y = ylab) +
+    coord_cartesian(ylim = ylim) +
+    ggplot_theme(base_size = base_size) +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
+          axis.ticks.x = element_blank(),
+          legend.position = 'bottom',
+          strip.text.y = element_text(size = 8))
+}
+
+get_summary_stats <- function (x, what, best_direction = 1) {
+  n_repl <- max(x$seed)
+  
+  best <- droplevels(x) %>% 
+    group_by(resid_dist, p_s_str, cont, seed) %>% 
+    summarize(method = method[which.max(best_direction * {{ what }})], .groups = 'drop') %>% 
+    group_by(resid_dist, p_s_str, cont, method) %>% 
+    summarize(best = n() / n_repl, .groups = 'drop')
+  
+  x %>% 
+    group_by(resid_dist, p_s_str, cont, method) %>% 
+    summarize(Med = median({{ what }}, na.rm = TRUE),
+              lower = quantile({{ what }}, 0.25, na.rm = TRUE),
+              upper = quantile({{ what }}, 0.75, na.rm = TRUE),
+              best = 0) %>% 
+    left_join(best, by = c('method', 'resid_dist', 'cont', 'p_s_str')) %>% 
+    mutate(IQR = sprintf('[%.4f, %.4f]', lower, upper),
+           `%Top` = if_else(!is.na(best.y), sprintf('%.0f%%', 100 * best.y), ''),
+           group_label = sprintf('%s (%s)', resid_dist, str_to_lower(cont))) %>% 
+    select(-best.x, -best.y)
+}
+
+print_summary_stats <- function (x, cols) {
+  tbl <- x %>% 
+    pivot_wider(c(group_label, method), names_from = p_s_str, values_from = {{ cols }},
+                names_glue = '{p_s_str}{.value}') %>% 
+    select(group_label,
+           "Method" = method,
+           starts_with('32'),
+           starts_with('64'),
+           starts_with('128'),
+           starts_with('256'),
+           starts_with('512')) %>% 
+    mutate(group_label = fct_inorder(group_label))
+
+  p_s_groups <- rle(str_extract(colnames(tbl)[-(1:2)], '[0-9() ]+'))
+  p_s_headers <- c(" " = 1, stats::setNames(p_s_groups$lengths, p_s_groups$values))
+  
+  print_tbl <- tbl %>%
+    select(-group_label) %>% 
+    kbl(digits = 3, booktabs = TRUE, align = paste0('l', strrep('r', ncol(tbl) - 2L)),
+        col.names = str_remove(colnames(tbl)[-1], '[0-9() ]+')) %>% 
+    add_header_above(header = p_s_headers) %>% 
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+  for (group in levels(tbl$group_label)) {
+    print_tbl <- print_tbl %>% 
+      pack_rows(group,
+                start_row = min(which(tbl$group_label == group)),
+                end_row = max(which(tbl$group_label == group)),
+                hline_after = TRUE)
+  }
+  print_tbl
+}
+```
+
+## Scenario 1
+
+```{r scenario_1-load-results}
+scenario_1 <- load_results(file.path(RESULTS_PATH, 'scenario_01'))
+```
+
+```{r scenario_1-check-results, warning=TRUE}
+any_missing(scenario_1$p, c(32, 128, 512), "p")
+any_missing(scenario_1$cont, c("No contamination", "10% contamination"), "contamination")
+any_missing(scenario_1$resid_dist,
+            c("Normal residuals", "Stable(1.33) residuals", "Cauchy residuals"), 
+            "residual distribution")
+
+scenario_1 %>%
+  group_by(p, resid_dist, cont, method, cv_type) %>% 
+  summarize(`Missing replications` = paste(setdiff(seq_len(50), seed), collapse = ', '), 
+            .groups = 'drop') %>% 
+  filter(nzchar(`Missing replications`)) %>% {
+    if (nrow(.) > 0L) {
+      warning("Several settings have more/less than 50 replications:")
+      .
+    } else {
+      invisible(NULL)
+    }
+  }
+```
+
+### Prediction accuracy
+
+```{r scenario_1-prediction_accuracy-selected, fig.width=7, fig.height=3.75, out.width='100%'}
+scenario_1 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM',
+         !str_ends(method, fixed('EN')),
+         !str_starts(resid_dist, fixed('Stable'))) %>% 
+  plot_pred_perf(ylim = c(1, 1.2))
+```
+
+```{r scenario_1-prediction_accuracy, fig.width=7, fig.height=5.25, out.width='100%'}
+scenario_1 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  plot_pred_perf(ylim = c(1, 1.2))
+```
+
+```{r scenario_1-prediction_accuracy-relative, fig.width=7, fig.height=5.25, out.width='100%'}
+scenario_1 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  plot_relative_pred_perf(ylim = c(-0.2, 0.2))
+```
+
+### Variable selection performance
+
+```{r scenario_1-mcc, out.width='100%', fig.width=7, fig.height=3.75, }
+scenario_1 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM',
+         !str_starts(resid_dist, fixed('Stable'))) %>% 
+  plot_any_pct(mcc, ylab = 'MCC of variable selection', pct = FALSE, avg = median)
+```
+
+
+```{r scenario_1-sens_spec, out.width='100%', fig.width=10, fig.height=5.25}
+scenario_1 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>%
+  {
+    sens <- plot_any_pct(., sens, ylab = 'Sensitivity', base_size = 12) +
+      labs(title = "(a) Sensitivity")
+    spec <- plot_any_pct(., spec, ylab = 'Specificity', base_size = 12, ylim = c(0.4, 1)) +
+      labs(title = "(b) Specificity")
+    
+    sens_grob <- ggplotGrob(sens)
+    sens_legend_id <- which(str_detect(sens_grob$layout$name, "guide"))
+    legend_grob <- sens_grob[["grobs"]][[sens_legend_id]]
+    legend_height <- sum(legend_grob$heights)
+
+    grid.arrange(sens + theme(legend.position="none"),
+                 spec + theme(legend.position="none"),
+                 legend_grob,
+                 layout_matrix = rbind(c(1,2), c(3,3)),
+                 heights = grid::unit.c(unit(1, "npc") - legend_height, legend_height))
+  }
+```
+
+## Scenario 2
+
+```{r scenario_2-load-results}
+scenario_2 <- load_results(file.path(RESULTS_PATH, 'scenario_02'))
+```
+
+```{r scenario_2-check-results, warning=TRUE}
+any_missing(scenario_2$p, c(32, 64, 128), "p")
+any_missing(scenario_2$cont, c("No contamination", "25% contamination"), "contamination")
+any_missing(scenario_2$resid_dist,
+            c("Normal residuals", "Stable(1.33) residuals", "Cauchy residuals"), 
+            "residual distribution")
+
+scenario_2 %>%
+  group_by(p, resid_dist, cont, method, cv_type) %>% 
+  summarize(`Missing replications` = paste(setdiff(seq_len(50), seed), collapse = ', '), 
+            .groups = 'drop') %>% 
+  filter(nzchar(`Missing replications`)) %>% {
+    if (nrow(.) > 0L) {
+      warning("Several settings have more/less than 50 replications:")
+      .
+    } else {
+      invisible(NULL)
+    }
+  }
+```
+
+### Prediction accuracy
+
+```{r scenario_2-prediction_accuracy, fig.width=7, fig.height=5.25, out.width='100%'}
+scenario_2 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  plot_pred_perf(ylim = c(1, 2))
+```
+
+```{r scenario_2-prediction_accuracy-relative, fig.width=7, fig.height=5.25, out.width='100%'}
+scenario_2 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  plot_relative_pred_perf(ylim = c(-0.2, 0.5))
+```
+
+
+### Variable selection performance
+
+```{r scenario_2-mcc, out.width='100%', fig.width=7, fig.height=5.25}
+scenario_2 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  plot_any_pct(mcc, ylab = 'MCC of variable selection', pct = FALSE, avg = median)
+```
+
+```{r scenario_2-sens_spec, out.width='100%', fig.width=10, fig.height=5.25}
+scenario_2 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>%
+  {
+    sens <- plot_any_pct(., sens, ylab = 'Sensitivity', base_size = 12, avg = mean) +
+      labs(title = "(a) Sensitivity")
+    spec <- plot_any_pct(., spec, ylab = 'Specificity', base_size = 12, ylim = c(0.4, 1), avg = mean) +
+      labs(title = "(b) Specificity")
+    
+    sens_grob <- ggplotGrob(sens)
+    sens_legend_id <- which(str_detect(sens_grob$layout$name, "guide"))
+    legend_grob <- sens_grob[["grobs"]][[sens_legend_id]]
+    legend_height <- sum(legend_grob$heights)
+
+    grid.arrange(sens + theme(legend.position="none"),
+                 spec + theme(legend.position="none"),
+                 legend_grob,
+                 layout_matrix = rbind(c(1,2), c(3,3)),
+                 heights = grid::unit.c(unit(1, "npc") - legend_height, legend_height))
+  }
+```
+
+## Good Leverage Points
+
+```{r good_leverage-load-results}
+good_leverage <- load_results(file.path(RESULTS_PATH, 'good_leverage'))
+```
+
+```{r good_leverage-sens_spec, out.width='100%', fig.width=7.1, fig.height=3.3}
+good_leverage %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM', method != 'Ada. MM', method != 'MM') %>% 
+  select(method, bad_lev_pos, ends_with('_cont')) %>%
+  pivot_longer(ends_with('_cont'), names_to = c('what', 'cont'),
+               names_pattern = '([senspc]+)_(.+)') %>% 
+  group_by(method, what, cont, bad_lev_pos) %>%
+  summarize(avg = mean(value)) %>%
+  ungroup() %>%
+  mutate(what = recode_factor(what, sens = 'Sensitivity', spec = 'Specificity'),
+         cont = recode_factor(cont,
+                              cont = 'Contaminated\nproteins',
+                              not_cont = 'Uncontaminated\nproteins')) %>%
+  droplevels() %>% 
+  {
+    guide <- guide_legend(title = 'Method',
+                          nrow = 1,
+                          keywidth = grid::unit(1.5, 'lines'),
+                          title.theme = element_text(face = 'bold', size = 9))
+    ggplot(., aes(x = bad_lev_pos, y = avg, 
+                  color = method, shape = method, linetype = method)) +
+      geom_line(size = 0.8) +
+      geom_point(size = 1.9) +
+      scale_color_colorblind(values = STYLE_COLOR, guide = guide,
+                             breaks = levels(.$method)) +
+      scale_fill_colorblind(values = STYLE_COLOR, guide = guide,
+                            breaks = levels(.$method)) +
+      scale_shape_manual(values = STYLE_SHAPE, guide = guide,
+                         breaks = levels(.$method)) +
+      scale_linetype_manual(values = STYLE_LINETYPE, guide = guide,
+                            breaks = levels(.$method)) +
+      scale_x_log10() +
+      scale_y_continuous(labels = scales::label_percent()) +
+      facet_grid(cols = vars(what), rows = vars(cont), scales = 'free') +
+      labs(x = 'Relative size of contaminated protein expression levels',
+           y = 'Average variable selection performance') +
+      ggplot_theme(base_size = 12) +
+      theme(legend.position = 'bottom',
+            legend.margin = margin())
+  }
+```
+
+## Appendix -- Not part of the manuscript
+
+### Proportion of being best method
+
+#### Scenario 1
+
+```{r scenario_1-winners}
+scenario_1 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  mutate(rel_pred_accuracy = pred_err_tau_size / scale_true) %>% 
+  {
+    x <- .
+    get_summary_stats(x, rel_pred_accuracy, best_direction = -1) %>% 
+      select(group_label, method, `Pred. accuracy` = `%Top`) %>%
+      left_join(get_summary_stats(x, mcc) %>% 
+                  select(group_label, method, `MCC` = `%Top`))
+  } %>% 
+  print_summary_stats(cols = c(`Pred. accuracy`, MCC))
+```
+
+#### Scenario 2
+
+```{r scenario_2-winners}
+scenario_2 %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  mutate(rel_pred_accuracy = pred_err_tau_size / scale_true) %>% 
+  {
+    x <- .
+    get_summary_stats(x, rel_pred_accuracy, best_direction = -1) %>% 
+      select(group_label, method, `Pred. accuracy` = `%Top`) %>%
+      left_join(get_summary_stats(x, mcc) %>% 
+                  select(group_label, method, `MCC` = `%Top`))
+  } %>% 
+  print_summary_stats(cols = c(`Pred. accuracy`, MCC))
+```

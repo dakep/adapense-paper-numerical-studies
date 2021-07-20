@@ -1,0 +1,362 @@
+---
+title: "Results for the Real Data Analysis"
+author: "David Kepplinger"
+output:
+  html_document:
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(purrr)
+library(ggplot2)
+library(stringr)
+library(pense)
+library(magrittr)
+source('utilities-plotting.R')
+RESULTS_PATH <- file.path('results', 'real_da')
+CV_RESULTS_PATH <- file.path(RESULTS_PATH, 'cv')
+
+FIGURE_PATH <- file.path('figures')
+
+custom_pdf <- function (filename, width, height) {
+  pdf_fun <- if (exists('cairo_pdf', mode = 'function')) {
+    cairo_pdf
+  } else {
+    pdf
+  }
+  if (!dir.exists(FIGURE_PATH)) {
+    dir.create(FIGURE_PATH)
+  }
+  fname <- file.path(FIGURE_PATH, paste0('glass-', basename(filename)))
+  fname <- str_replace(fname, fixed('-1.pdf'), '.pdf')
+  pdf_fun(filename = fname, width = width, height = height)
+}
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      dev = c('png', 'custom_pdf'),
+                      fig.ext = c('png', 'pdf'))
+
+## Load the data
+requireNamespace('chemometrics')
+requireNamespace('cellWise')
+glass_data_env <- new.env(parent = emptyenv())
+data(glass, package = 'chemometrics', envir = glass_data_env)
+data(data_glass, package = 'cellWise', envir = glass_data_env)
+
+glass_y_orig <- glass_data_env$glass[, 'P2O5']
+glass_y <- log(glass_y_orig)
+glass_x <- as.matrix(glass_data_env$data_glass[, 15:500])
+
+## Helper functions
+`%||%` <- function (x, y) {
+  if (is.null(x)) {
+    y
+  } else {
+    x
+  }
+}
+
+extract_test_pred_errors <- function (estimates, .id = NULL) {
+  map2_dfr(estimates, names(estimates), function (x, suffix) {
+    if (is.list(x)) {
+      .id <- if (!is.null(.id)) {
+        paste(.id, suffix, sep = '_')
+      } else {
+        suffix
+      }
+      if (is.null(x$test_pred_err)) {
+        extract_test_pred_errors(x, .id)
+      } else {
+        tibble(method = .id, 
+               pred = x$test_pred, 
+               zeta = x$zeta %||% NA_real_,
+               alpha = x$alpha %||% NA_real_, 
+               bdp = x$bdp %||% NA_real_,
+               nnz = sum(abs(x$beta) > .Machine$double.eps))
+      }
+    } else {
+      NULL
+    }
+  })
+}
+
+extract_cv_curve <- function (estimates, .id = NULL) {
+  map2_dfr(estimates, names(estimates), function (x, suffix) {
+    if (is.list(x)) {
+      .id <- if (!is.null(.id)) {
+        paste(.id, suffix, sep = '_')
+      } else {
+        suffix
+      }
+      if (is.null(x$cv_curve)) {
+        extract_cv_curve(x, .id)
+      } else {
+        tibble(method = .id, 
+               zeta = x$zeta %||% NA_real_, 
+               bdp = x$bdp %||% NA_real_) %>% 
+          cbind(x$cv_curve)
+      }
+    } else {
+      NULL
+    }
+  })
+}
+```
+
+## Nested CV results
+
+```{r load-cv-results}
+cv_results <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>% 
+  map_dfr(function (fname) {
+    job_res <- readRDS(fname)
+    
+    tibble(seed = job_res$job$seed,
+           fold = job_res$job$fold,
+           obs_index = job_res$job$test_fold) %>% 
+      cbind(extract_test_pred_errors(job_res$estimates))
+  }) %>%
+  mutate(method = str_replace(method, fixed('cv_'), ''),
+         cv_type = str_extract(method, '(se|min)$'),
+         method = str_remove(method, '_(se|min)$'),
+         method = recode_method(method)) %>% 
+  filter(seed <= 50, seed >= 1,
+         fold <= 6, fold >= 1)
+```
+
+
+```{r check-cv-results, warning=TRUE}
+cv_results %>%
+  summarize(`Missing seeds` = paste(setdiff(seq_len(50), unique(seed)), collapse = ', '), 
+            .groups = 'drop') %>% 
+  filter(nzchar(`Missing seeds`)) %>% {
+    if (nrow(.) > 0L) {
+      warning("One or more seeds are missing:")
+      .
+    } else {
+      invisible(NULL)
+    }
+  }
+
+cv_results %>%
+  group_by(seed) %>% 
+  summarize(`Missing folds` = paste(setdiff(seq_len(6), unique(fold)), collapse = ', '), 
+            .groups = 'drop') %>% 
+  filter(nzchar(`Missing folds`)) %>% {
+    if (nrow(.) > 0L) {
+      warning("One or more seeds are missing folds:")
+      .
+    } else {
+      invisible(NULL)
+    }
+  }
+```
+
+### Number of non-zero coefficients
+
+```{r}
+cv_results %>% 
+  filter(!is.na(method)) %>% 
+  group_by(method, cv_type, seed, fold) %>% 
+  summarize(nnz = nnz[[1L]]) %>% 
+  group_by(method, cv_type) %>% 
+  summarize(`Mean` = mean(nnz),
+            `SD` = sd(nnz),
+            `Median` = median(nnz),
+            Minimum = min(nnz),
+            `5% quantile` = quantile(nnz, 0.05),
+            `95% quantile` = quantile(nnz, 0.95),
+            Maximum = max(nnz)) %>% 
+  arrange(`Mean`)
+```
+
+### Prediction accuracy
+
+```{r prediction_performance-log, fig.width=5, fig.height=3, out.width='66%', fig.align='center'}
+cv_results %>% 
+  filter(cv_type == 'se', method != 'I-LAMM', !is.na(method)) %>% 
+  group_by(seed, method) %>%
+  summarize(pred_err = tau_size(glass_y[obs_index] - pred), 
+            pred_err_orig = tau_size(glass_y_orig[obs_index] - exp(pred)),
+            .groups = 'drop') %>% 
+  pivot_longer(starts_with('pred_err'), names_to = 'scale', values_to = 'pred_err') %>%
+  mutate(scale = recode(scale, 
+                        pred_err = 'log scale [log % w/w]', 
+                        pred_err_orig = 'original scale [% w/w]')) %>% 
+  ggplot(aes(x = method, y = pred_err, 
+             fill = method, color = method, alpha = method, shape = method)) +
+  geom_boxplot(notch = TRUE, outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.15, seed = 123), 
+             alpha = 0.4,
+             size = 1) +
+  scale_fill_colorblind(guide = 'none', values = STYLE_COLOR) +
+  scale_color_colorblind(guide = 'none',
+                         values = c('Ada. MM' = '#444444',
+                                    'Ada. PENSE' = '#444444',
+                                    'Ada. EN' = '#444444',
+                                    STYLE_COLOR[c('PENSE', 'MM', 'EN', 'I-LAMM')])) +
+  scale_alpha_manual(guide = 'none',
+                     values = c('Ada. MM' = 1,
+                                'Ada. PENSE' = 1,
+                                'Ada. EN' = 1,
+                                'PENSE' = 0.25,
+                                'MM' = 0.25,
+                                'I-LAMM' = 1,
+                                'EN' = .25)) +
+  scale_shape_manual(guide = 'none', values = STYLE_SHAPE) +
+  scale_x_discrete(labels = function (lbl) { str_replace_all(lbl, fixed(' '), '\n')}) +
+  facet_wrap(~ scale, scales = 'free') +
+  labs(y = expression(paste(tau, '-scale of prediction errors')), x = NULL, fill = NULL) +
+  ggplot_theme()
+```
+
+## Fit to full data set
+```{r load-full-estimates}
+full_estimates <- readRDS(file.path(RESULTS_PATH, 'full_estimates.rds'))
+```
+
+```{r selected-predictors}
+extract_nz_freqs <- function (estimate, name) {
+  beta <- if (is.numeric(estimate$beta)) {
+    nnz <- which(abs(estimate$beta) > 1e-12)
+    sparseVector(estimate$beta[nnz], i = nnz, length = length(estimate$beta))
+  } else {
+    estimate$beta
+  }
+  tbl <- tibble(freq_index = beta@i,
+                freq = colnames(glass_x)[beta@i])
+  colnames(tbl)[[2]] <- name
+  tbl
+}
+
+nz_freqs <- extract_nz_freqs(full_estimates$adapense$cv_se, 'Ada. PENSE') %>% 
+  full_join(extract_nz_freqs(full_estimates$adamm$cv_se, 'Ada. MM')) %>% 
+  full_join(extract_nz_freqs(full_estimates$adaen$cv_se, 'Ada. EN')) %>% 
+  full_join(extract_nz_freqs(full_estimates$pense$cv_se, 'PENSE')) %>% 
+  full_join(extract_nz_freqs(full_estimates$mm$cv_se, 'MM')) %>% 
+  full_join(extract_nz_freqs(full_estimates$en$cv_se, 'EN')) %>% 
+  full_join(extract_nz_freqs(full_estimates$ilamm, 'I-LAMM')) %>%
+  arrange(freq_index) %>% 
+  select(-freq_index)
+```
+
+Number of frequencies with non-zero coefficients:
+
+```{r}
+nz_freqs %>% 
+  summarize(across(.fns = function (x) {
+    sum(!is.na(x))
+  }))
+```
+
+The selected frequencies are the following:
+
+```{r}
+nz_freqs %>% 
+  mutate(across(everything(), coalesce, '—'))
+```
+
+```{r adapense_fitted-log, fig.width=2.6, fig.height=3.1, out.width="33%", fig.align='center'}
+y_fit <- with(full_estimates$adapense$cv_se, intercept + as.numeric(glass_x %*% beta))
+resid_scale <- mlocscale(glass_y - y_fit, 0.28)[['scale']]
+
+outlier_cutoff <- 3
+outlier_band_int <- resid_scale * outlier_cutoff
+outlier_polygon <- data.frame(x = c(-10, -10, 50 - outlier_band_int,
+                                    -10,  50, 50),
+                              y = c(outlier_band_int - 10, 50,  50,
+                                    -outlier_band_int - 10, 
+                                    -outlier_band_int - 10, 
+                                    -outlier_band_int + 50),
+                              gr = c('u', 'u', 'u', 'l', 'l', 'l'), color = 'outer_band',
+                              stringsAsFactors = FALSE)
+
+fitted_vs_obs_data <- tibble(y = glass_y,
+                             yfit = y_fit,
+                             rel_resid = abs(y - y_fit) / resid_scale,
+                             color = if_else(rel_resid > outlier_cutoff, 'outlier', 'inlier'))
+
+ggplot(fitted_vs_obs_data, aes(x = y, y = yfit, color = color, alpha = color)) +
+  geom_polygon(data = outlier_polygon, 
+               aes(x = x, y = y, group = gr, color = color, fill = color),
+               alpha = .1, linetype = '34') +
+  geom_point(size = 2) +
+  geom_abline(slope = 1, intercept = 0, color = 'gray20', lty = '22', size = 2/3) +
+  scale_y_continuous(name = expression(paste('Fitted log-concentration of ', P[2], O[5], 
+                                             ' [log % w/w]')),
+                     breaks = seq(-4, 1, by = 1)) +
+  scale_x_continuous(name = expression(atop(
+    paste('Observed log-concentration of ', P[2], O[5]), 
+    paste('\n[log % w/w]'))),
+    breaks = seq(-4, 1, by = 1),
+    minor_breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
+    sec.axis = dup_axis(
+      breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
+      labels = c(0.02, 0.06, 0.2, 0.6, 2, 6),
+      name = expression(paste('Observed concentration of ', P[2], O[5], ' [% w/w]')))) +
+  scale_alpha_manual(guide = 'none', values = c('inlier' = 0.5, 'outlier' = 1,
+                                                'outer_band' = 1)) +
+  scale_color_colorblind(guide = 'none', values = c('inlier' = 'gray', 'outlier' = 'blue',
+                                                    'outer_band' = 'lightblue')) +
+  scale_fill_colorblind(guide = 'none', values = c('inlier' = 'gray', 'outlier' = 'blue',
+                                                   'outer_band' = 'lightblue')) +
+  coord_fixed(xlim = c(-4, 1), ylim = c(-3, 2)) +
+  ggplot_theme() +
+  theme(panel.grid.minor.x = element_line(color = colorblind_cols('lightblue'), 
+                                          size = rel(0.5), linetype = "dotted"),
+        axis.title.x.bottom = element_text(hjust = 0.6))
+```
+
+## Appendix -- not part of the manuscript
+
+### Verifying the grids of penalization levels
+
+The grids for the estimates on the full data are well adjusted:
+
+```{r app-lambda-grids-full-data, out.width='100%', dev = 'png'}
+cbind(full_estimates$adapense$cv_se$cv_curve, method = 'Ada. PENSE') %>% 
+  bind_rows(cbind(full_estimates$adamm$cv_se$cv_curve, method = 'Ada. MM')) %>% 
+  bind_rows(cbind(full_estimates$mm$cv_se$cv_curve, method = 'MM')) %>% 
+  bind_rows(cbind(full_estimates$pense$cv_se$cv_curve, method = 'PENSE')) %>% 
+  ggplot(aes(x = lambda, y = cvavg, ymin = cvavg - 3 * cvse, ymax = cvavg + 3 * cvse)) +
+  geom_pointrange() +
+  scale_x_log10() +
+  facet_wrap(~ method, ncol = 2, scales = 'free_x')
+```
+
+Similarly for the CV estimates, the minima are well separated from the left boundary:
+
+```{r app-load-lambda-grids-cv}
+cv_curves <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>% 
+  map_dfr(function (fname) {
+    job_res <- readRDS(fname)
+    
+    tibble(seed = job_res$job$seed, 
+           fold = job_res$job$fold) %>%
+      cbind(extract_cv_curve(job_res$estimates))
+  }) %>%
+  mutate(method = str_replace(method, fixed('cv_'), ''))
+```
+
+```{r app-plot-lambda-grids-cv, out.width='100%', dev = 'png'}
+cv_curves %>% 
+  mutate(method = recode_factor(method,
+                                adapense_se = 'Ada. PENSE',
+                                adamm_se = 'Ada. MM',
+                                pense_se = 'PENSE',
+                                mm_se = 'MM',
+                                .default = NA_character_)) %>% 
+  filter(!is.na(method)) %>% 
+  group_by(seed, fold, method, alpha, zeta) %>% 
+  mutate(lambda_rel = lambda / max(lambda),
+         lambda_best = if_else(cvavg == min(cvavg), lambda/ max(lambda), NA_real_)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = lambda_rel, y = cvavg, ymin = cvavg - cvse, ymax = cvavg + cvse,
+             group = interaction(seed, fold))) +
+  geom_line(alpha = 0.4, color = 'gray50') +
+  geom_pointrange(aes(x = lambda_best), color = colorblind_cols('blue')) +
+  scale_x_log10() +
+  facet_wrap(~ method, scales = 'free_x')
+```
