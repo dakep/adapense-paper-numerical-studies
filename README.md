@@ -6,7 +6,7 @@ This repository contains all necessary code and data to reproduce the results in
 
 Re-computing all results takes about 33,000 CPU hours when using an R build linked to an optimized BLAS/LAPACK library (e.g., Intel® MKL).
 Since it is not feasible to reproduce all results without access to a high performance cluster (HPC), the repository also contains R data files with results for individual replications (called "jobs").
-This allows to re-compute only some of these jobs and still generate all results in the manuscript.
+This allows re-computing only some of these jobs and still generate all results in the manuscript.
 
 ## Dependencies
 

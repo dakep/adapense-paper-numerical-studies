@@ -59,7 +59,7 @@ glass_x <- as.matrix(glass_data_env$data_glass[, 15:500])
   }
 }
 
-extract_test_pred_errors <- function (estimates, .id = NULL) {
+extract_test_pred <- function (estimates, .id = NULL) {
   map2_dfr(estimates, names(estimates), function (x, suffix) {
     if (is.list(x)) {
       .id <- if (!is.null(.id)) {
@@ -67,8 +67,8 @@ extract_test_pred_errors <- function (estimates, .id = NULL) {
       } else {
         suffix
       }
-      if (is.null(x$test_pred_err)) {
-        extract_test_pred_errors(x, .id)
+      if (is.null(x$test_pred)) {
+        extract_test_pred(x, .id)
       } else {
         tibble(method = .id, 
                pred = x$test_pred, 
@@ -116,7 +116,7 @@ cv_results <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>%
     tibble(seed = job_res$job$seed,
            fold = job_res$job$fold,
            obs_index = job_res$job$test_fold) %>% 
-      cbind(extract_test_pred_errors(job_res$estimates))
+      cbind(extract_test_pred(job_res$estimates))
   }) %>%
   mutate(method = str_replace(method, fixed('cv_'), ''),
          cv_type = str_extract(method, '(se|min)$'),
