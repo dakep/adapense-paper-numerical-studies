@@ -127,7 +127,7 @@ for (job in unique(args$job)) {
     cl = args$cluster,
     eps = NUMERIC_EPS,
     cache_path = job_cache_path,
-    en_algo_opts = en_lars_options(),
+    en_algo_opts = en_dal_options(),
     penalty_loadings = NULL)
 
   ## Compute adaptive PENSE estimates
@@ -135,8 +135,8 @@ for (job in unique(args$job)) {
     y = train_glass_y, x = train_glass_x,
     nlambda = PENALTY_LEVELS,
     nlambda_enpy = PENSE_INITIAL_PENALTY_LEVELS,
-    lambda_min_ratio = c(5e-2, 2e-3),
-    lambda_min_ratio_prelim = 1e-1,
+    lambda_min_ratio = c(5e-2, 6e-4),
+    lambda_min_ratio_prelim = 5e-2,
     seed = job_seed,
     alpha = ALPHA_SEQUENCE,
     zeta_seq = ZETA_SEQUENCE,
@@ -149,7 +149,7 @@ for (job in unique(args$job)) {
     cl = args$cluster,
     eps = NUMERIC_EPS,
     cache_path = job_cache_path,
-    en_algo_opts = en_lars_options())
+    en_algo_opts = en_dal_options())
 
   ## Compute MM estimates from the scale estimated via PENSE-Ridge
   cv_results$estimates$mm <- compute_adammest_cv(
