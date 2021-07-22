@@ -150,12 +150,13 @@ ggplot_theme <- function(base_size = 12, base_family = '') {
   }
 
   theme_bw(base_size = base_size, base_family = base_family) +
-    theme(plot.title = element_text(size = rel(1), hjust = 0.5),
-          plot.margin = margin(0.2, 0.4, 0.5, 0.2, 'lines'),
+    theme(plot.title = element_text(size = rel(0.8), hjust = 0.5, face = 'bold'),
+          plot.margin = margin(0.2, 0.4, 0, 0.2, 'lines'),
           panel.background = element_rect(fill = 'transparent', color = NA),
           plot.background = element_rect(fill = 'transparent', color = NA),
           legend.title = element_text(size = rel(0.7)),
           legend.text = element_text(size = rel(0.7)),
+          legend.margin = margin(),
           axis.title = element_text(size = rel(0.75)),
           axis.text = element_text(size = rel(0.7)),
           axis.title.y = element_text(vjust = 1),
@@ -167,3 +168,4 @@ ggplot_theme <- function(base_size = 12, base_family = '') {
           panel.border = element_rect(color = 'gray50', size = 0.3),
           legend.background = element_blank())
 }
+

@@ -108,7 +108,6 @@ extract_estimate_stats <- function (estimates, job, .id = NULL) {
       } else {
         tibble(method = .id, 
                pred_err_tau_size = x$test_pred_err_tau_size %||% NA_real_,
-               pred_err_rmspe = sqrt(mean(x$test_pred_err^2)) %||% NA_real_,
                zeta = x$zeta %||% NA_real_,
                alpha = x$alpha %||% NA_real_, 
                bdp = x$bdp %||% NA_real_,
@@ -117,7 +116,6 @@ extract_estimate_stats <- function (estimates, job, .id = NULL) {
     } else {
       tibble(method = .id, 
              pred_err_tau_size = NA_real_,
-             pred_err_rmspe = NA_real_,
              zeta = NA_real_,
              alpha = NA_real_, 
              bdp = NA_real_,
@@ -178,8 +176,6 @@ plot_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg = median)
   }
   
   plot_obj <- plot_d %>% 
-    mutate(pred_err = if_else(str_detect(resid_dist, 'Normal'),
-                              pred_err_rmspe, pred_err_tau_size)) %>% 
     ggplot(aes(x = as.integer(p_s_str), y = pred_err_tau_size / scale_true,
                color = method, shape = method, fill = method)) +
     geom_point(position = position_dodge(width = 0.8),
@@ -207,10 +203,11 @@ plot_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg = median)
     facet_grid(cols = vars(cont), rows = vars(resid_dist), scale = 'free') +
     labs(x = "Number of predictors (thereof active)",
          y = "Relative scale of the prediction error") +
-    ggplot_theme(base_size = 12) +
+    ggplot_theme(base_size = 11) +
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
           axis.ticks.x = element_blank(),
+          legend.margin = margin(),
           legend.position = 'bottom')
   
   plot_obj
@@ -228,10 +225,9 @@ plot_relative_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg 
   avg <- match.fun(avg)
 
   plot_d <- plot_d %>% 
-    mutate(pred_err = if_else(str_detect(resid_dist, 'Normal'),
-                              pred_err_rmspe, pred_err_tau_size)) %>% 
     group_by(p_s_str, cont, resid_dist, seed) %>% 
-    mutate(pred_err_diff = pred_err / c(pred_err[method == baseline], NA_real_)[[1L]],
+    mutate(pred_err_diff = pred_err_tau_size / 
+             c(pred_err_tau_size[method == baseline], NA_real_)[[1L]],
            pred_err_diff = if_else(pred_err_diff < 1, - 1 / pred_err_diff + 1,
                                    pred_err_diff - 1)) %>% 
     filter(method != baseline, !is.na(pred_err_diff)) %>% 
@@ -274,16 +270,17 @@ plot_relative_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg 
     facet_grid(cols = vars(cont), rows = vars(resid_dist), scale = 'free') +
     labs(x = "Number of predictors (thereof active)",
          y = sprintf("Difference in prediction accuracy\nrelative to the accuracy of %s", baseline)) +
-    ggplot_theme(base_size = 12) +
+    ggplot_theme(base_size = 11) +
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
           axis.ticks.x = element_blank(),
+          legend.margin = margin(),
           legend.position = 'bottom')
   
   plot_obj
 }
 
-plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE, base_size = 12,
+plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE, base_size = 11,
                           conf_level = 0.5, avg = median) {
   if (missing(guide)) {
     guide <- guide_legend(title = 'Method',
@@ -338,6 +335,7 @@ plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE,
           panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
           axis.ticks.x = element_blank(),
           legend.position = 'bottom',
+          legend.margin = margin(),
           strip.text.y = element_text(size = 8))
 }
 
@@ -426,7 +424,7 @@ scenario_1 %>%
 
 ### Prediction accuracy
 
-```{r scenario_1-prediction_accuracy-selected, fig.width=7, fig.height=3.75, out.width='100%'}
+```{r scenario_1-prediction_accuracy-selected, fig.width=7, fig.height=3, out.width='100%'}
 scenario_1 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM',
          !str_ends(method, fixed('EN')),
@@ -434,13 +432,13 @@ scenario_1 %>%
   plot_pred_perf(ylim = c(1, 1.2))
 ```
 
-```{r scenario_1-prediction_accuracy, fig.width=7, fig.height=5.25, out.width='100%'}
+```{r scenario_1-prediction_accuracy, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_1 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>% 
   plot_pred_perf(ylim = c(1, 1.2))
 ```
 
-```{r scenario_1-prediction_accuracy-relative, fig.width=7, fig.height=5.25, out.width='100%'}
+```{r scenario_1-prediction_accuracy-relative, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_1 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>% 
   plot_relative_pred_perf(ylim = c(-0.2, 0.2))
@@ -448,7 +446,7 @@ scenario_1 %>%
 
 ### Variable selection performance
 
-```{r scenario_1-mcc, out.width='100%', fig.width=7, fig.height=3.75, }
+```{r scenario_1-mcc, out.width='100%', fig.width=7, fig.height=3}
 scenario_1 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM',
          !str_starts(resid_dist, fixed('Stable'))) %>% 
@@ -456,7 +454,7 @@ scenario_1 %>%
 ```
 
 
-```{r scenario_1-sens_spec, out.width='100%', fig.width=10, fig.height=5.25}
+```{r scenario_1-sens_spec, out.width='100%', fig.width=8, fig.height=4.75}
 scenario_1 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>%
   {
@@ -507,13 +505,13 @@ scenario_2 %>%
 
 ### Prediction accuracy
 
-```{r scenario_2-prediction_accuracy, fig.width=7, fig.height=5.25, out.width='100%'}
+```{r scenario_2-prediction_accuracy, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_2 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>% 
   plot_pred_perf(ylim = c(1, 2))
 ```
 
-```{r scenario_2-prediction_accuracy-relative, fig.width=7, fig.height=5.25, out.width='100%'}
+```{r scenario_2-prediction_accuracy-relative, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_2 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>% 
   plot_relative_pred_perf(ylim = c(-0.2, 0.5))
@@ -522,13 +520,13 @@ scenario_2 %>%
 
 ### Variable selection performance
 
-```{r scenario_2-mcc, out.width='100%', fig.width=7, fig.height=5.25}
+```{r scenario_2-mcc, out.width='100%', fig.width=7, fig.height=4.6}
 scenario_2 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>% 
   plot_any_pct(mcc, ylab = 'MCC of variable selection', pct = FALSE, avg = median)
 ```
 
-```{r scenario_2-sens_spec, out.width='100%', fig.width=10, fig.height=5.25}
+```{r scenario_2-sens_spec, out.width='100%', fig.width=8, fig.height=4.75}
 scenario_2 %>% 
   filter(cv_type == 'se' | method == 'I-LAMM') %>%
   {
@@ -556,7 +554,7 @@ scenario_2 %>%
 good_leverage <- load_results(file.path(RESULTS_PATH, 'good_leverage'))
 ```
 
-```{r good_leverage-sens_spec, out.width='100%', fig.width=7.1, fig.height=3.3}
+```{r good_leverage-sens_spec, out.width='100%', fig.width=7, fig.height=3}
 good_leverage %>% 
   filter(cv_type == 'se' | method == 'I-LAMM', method != 'Ada. MM', method != 'MM') %>% 
   select(method, bad_lev_pos, ends_with('_cont')) %>%
@@ -593,8 +591,7 @@ good_leverage %>%
       labs(x = 'Relative size of contaminated protein expression levels',
            y = 'Average variable selection performance') +
       ggplot_theme(base_size = 12) +
-      theme(legend.position = 'bottom',
-            legend.margin = margin())
+      theme(legend.position = 'bottom')
   }
 ```
 
