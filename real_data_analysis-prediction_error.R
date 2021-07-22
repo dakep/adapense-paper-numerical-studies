@@ -112,7 +112,7 @@ for (job in unique(args$job)) {
 
   ## Compute PENSE estimates
   cv_results$estimates$pense <- compute_adapense_cv(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     nlambda = PENALTY_LEVELS,
     nlambda_enpy = PENSE_INITIAL_PENALTY_LEVELS,
     lambda_min_ratio = 5e-2,
@@ -132,7 +132,7 @@ for (job in unique(args$job)) {
 
   ## Compute adaptive PENSE estimates
   cv_results$estimates$adapense <- compute_adapense_cv_zeta(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     nlambda = PENALTY_LEVELS,
     nlambda_enpy = PENSE_INITIAL_PENALTY_LEVELS,
     lambda_min_ratio = c(5e-2, 2e-3),
@@ -153,7 +153,7 @@ for (job in unique(args$job)) {
 
   ## Compute MM estimates from the scale estimated via PENSE-Ridge
   cv_results$estimates$mm <- compute_adammest_cv(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     pense_ridge = cv_results$estimates$adapense$preliminary$cv_min,
     nlambda = PENALTY_LEVELS,
     lambda_min_ratio = 1e-1,
@@ -171,7 +171,7 @@ for (job in unique(args$job)) {
 
   ## Compute adaptive MM estimates
   cv_results$estimates$adamm <- compute_adammest_cv_zeta(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     pense_ridge = cv_results$estimates$adapense$preliminary$cv_min,
     nlambda = PENALTY_LEVELS,
     lambda_min_ratio = c(5e-2, 2e-3),
@@ -189,7 +189,7 @@ for (job in unique(args$job)) {
 
   ## Compute ILAMM estimates
   cv_results$estimates$ilamm <- compute_ilamm(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     nlambda = PENALTY_LEVELS,
     seed = job_seed,
     cv_k = CV_K,
@@ -198,7 +198,7 @@ for (job in unique(args$job)) {
 
   ## Compute LS-EN estimates
   cv_results$estimates$en <- comp_glmnet(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     nlambda = PENALTY_LEVELS,
     alpha = ALPHA_SEQUENCE,
     seed = job_seed,
@@ -208,7 +208,7 @@ for (job in unique(args$job)) {
 
   ## Compute adaptive LS-EN estimates
   cv_results$estimates$adaen <- comp_glmnet_zeta(
-    y = glass_y, x = glass_x,
+    y = train_glass_y, x = train_glass_x,
     nlambda = PENALTY_LEVELS,
     alpha = ALPHA_SEQUENCE,
     zeta_seq = ZETA_SEQUENCE,
