@@ -69,7 +69,7 @@ Assuming the `--result-dir` argument is *results/real_da*, the script saves the 
 This repository contains all 300 result files computed for the manuscript (*0001-01.rds* to *0050-06.rds*).
 
 For the manuscript, a total of 50 replications of 6 fold CV were performed (jobs 1 to 300).
-Each job takes ~10 CPU hours.
+Each job takes ~14 CPU hours.
 To replicate all results in the manuscript, the R script must be called for each job:
 
 ```sh

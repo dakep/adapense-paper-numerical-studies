@@ -175,13 +175,20 @@ cv_results %>%
 
 ### Prediction accuracy
 
-```{r prediction_performance-log, fig.width=5, fig.height=3, out.width='66%', fig.align='center'}
-pred_perf_plot <- cv_results %>% 
-  filter(cv_type == 'se', method != 'I-LAMM', !is.na(method)) %>% 
+```{r compute-prediction_accuracy}
+pred_acc <- cv_results %>% 
+  filter(cv_type == 'se' | method == 'I-LAMM', !is.na(method)) %>%
   group_by(seed, method) %>%
   summarize(pred_err = tau_size(glass_y[obs_index] - pred), 
             pred_err_orig = tau_size(glass_y_orig[obs_index] - exp(pred)),
-            .groups = 'drop') %>% 
+            .groups = 'drop')
+```
+
+I-LAMM has a median prediction accuracy of `r median(filter(pred_acc, method == 'I-LAMM')$pred_err)` (`r median(filter(pred_acc, method == 'I-LAMM')$pred_err_orig)` on the original scale).
+
+```{r prediction_performance-log, fig.width=5, fig.height=3, out.width='66%', fig.align='center'}
+pred_perf_plot <- pred_acc %>% 
+  filter(method != 'I-LAMM') %>%
   pivot_longer(starts_with('pred_err'), names_to = 'scale', values_to = 'pred_err') %>%
   mutate(scale = recode(scale, 
                         pred_err = 'log scale [log % w/w]', 
@@ -342,7 +349,7 @@ cbind(full_estimates$adapense$cv_se$cv_curve, method = 'Ada. PENSE') %>%
   facet_wrap(~ method, ncol = 2, scales = 'free_x')
 ```
 
-Similarly for the CV estimates, the minima are well separated from the left boundary:
+Similarly for the estimates in the nested CV, the vast majority of minima are above the smallest penalization.
 
 ```{r app-load-lambda-grids-cv}
 cv_curves <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>% 
@@ -359,20 +366,25 @@ cv_curves <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>%
 ```{r app-plot-lambda-grids-cv, out.width='100%', dev = 'png'}
 cv_curves %>% 
   mutate(method = recode_factor(method,
+                                pense_se = 'PENSE',
+                                adapense_preliminary_min = 'PENSE-Ridge',
                                 adapense_se = 'Ada. PENSE',
                                 adamm_se = 'Ada. MM',
-                                pense_se = 'PENSE',
                                 mm_se = 'MM',
                                 .default = NA_character_)) %>% 
   filter(!is.na(method)) %>% 
   group_by(seed, fold, method, alpha, zeta) %>% 
   mutate(lambda_rel = lambda / max(lambda),
-         lambda_best = if_else(cvavg == min(cvavg), lambda/ max(lambda), NA_real_)) %>% 
+         lambda_best = if_else(cvavg == min(cvavg), lambda_rel, NA_real_),
+         color = if_else(abs(min(lambda_rel) - lambda_best) < .Machine$double.eps, 
+                         colorblind_cols('orange'), colorblind_cols('blue'))) %>% 
   ungroup() %>% 
   ggplot(aes(x = lambda_rel, y = cvavg, ymin = cvavg - cvse, ymax = cvavg + cvse,
+             color = color,
              group = interaction(seed, fold))) +
   geom_line(alpha = 0.4, color = 'gray50') +
-  geom_pointrange(aes(x = lambda_best), color = colorblind_cols('blue')) +
+  geom_pointrange(aes(x = lambda_best)) +
+  scale_color_identity() +
   scale_x_log10() +
   facet_wrap(~ method, scales = 'free_x')
 ```
