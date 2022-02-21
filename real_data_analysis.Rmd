@@ -217,7 +217,7 @@ pred_perf_plot <- pred_acc %>%
   scale_x_discrete(labels = function (lbl) { str_replace_all(lbl, fixed(' '), '\n')}) +
   facet_wrap(~ scale, scales = 'free') +
   labs(y = expression(paste(tau, '-scale of prediction errors')), x = NULL, fill = NULL) +
-  ggplot_theme(base_size = 11)
+  ggplot_theme(base_size = 12)
 
 pred_perf_plot
 ```
@@ -295,18 +295,17 @@ fitted_vs_obs_plot <- ggplot(fitted_vs_obs_data,
                alpha = .1, linetype = '34') +
   geom_point(size = 2) +
   geom_abline(slope = 1, intercept = 0, color = 'gray20', lty = '22', size = 2/3) +
-  scale_y_continuous(name = expression(paste('Fitted log-concentration of ', P[2], O[5], 
+  scale_y_continuous(name = expression(paste('Fitted concentration of ', P[2], O[5], 
                                              ' [log % w/w]')),
                      breaks = seq(-4, 1, by = 1)) +
-  scale_x_continuous(name = expression(atop(
-    paste('Observed log-concentration of ', P[2], O[5]), 
-    paste('\n[log % w/w]'))),
+  scale_x_continuous(name = expression(
+    paste('Obs. conc. of ', P[2], O[5], ' [log % w/w]')),
     breaks = seq(-4, 1, by = 1),
     minor_breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
     sec.axis = dup_axis(
       breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
       labels = c(0.02, 0.06, 0.2, 0.6, 2, 6),
-      name = expression(paste('Observed concentration of ', P[2], O[5], ' [% w/w]')))) +
+      name = expression(paste('Obs. conc. of ', P[2], O[5], ' [% w/w]')))) +
   scale_alpha_manual(guide = 'none', values = c('inlier' = 0.5, 'outlier' = 1,
                                                 'outer_band' = 1)) +
   scale_color_colorblind(guide = 'none', values = c('inlier' = 'gray', 'outlier' = 'blue',
@@ -314,7 +313,7 @@ fitted_vs_obs_plot <- ggplot(fitted_vs_obs_data,
   scale_fill_colorblind(guide = 'none', values = c('inlier' = 'gray', 'outlier' = 'blue',
                                                    'outer_band' = 'lightblue')) +
   coord_fixed(xlim = c(-4, 1), ylim = c(-3, 2)) +
-  ggplot_theme(base_size = 11) +
+  ggplot_theme(base_size = 12) +
   theme(panel.grid.minor.x = element_line(color = colorblind_cols('lightblue'), 
                                           size = rel(0.5), linetype = "dotted"),
         axis.title.x.bottom = element_text(hjust = 0.6))
@@ -325,11 +324,13 @@ fitted_vs_obs_plot
 ## Combined in a single plot
 
 ```{r combined, out.width='100%', fig.width=7, fig.height=3}
+pdf("../adapense-paper/figures/glass-combined.pdf", width = 7, height = 3)
 grid.arrange(pred_perf_plot + labs(title = "(a) Prediction accuracy"),
              fitted_vs_obs_plot + labs(title = "(b) Fitted vs. observed"),
-             layout_matrix = matrix(c(1, 3, 2, 2), nrow = 2, ncol = 2),
-             widths = grid::unit(c(0.66, 0.34), "npc"),
-             heights = grid::unit(c(0.95, 0.05), "npc"))
+             layout_matrix = matrix(c(1, 1, 2, 3), nrow = 2, ncol = 2),
+             widths = grid::unit(c(0.68, 0.32), "npc"),
+             heights = grid::unit(c(0.9, 0.1), "npc"))
+dev.off()
 ```
 
 ## Appendix -- not part of the manuscript
