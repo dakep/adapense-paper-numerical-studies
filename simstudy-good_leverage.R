@@ -204,6 +204,16 @@ for (k_lev in SIM_LEV_POS) {
     cache_path = job_cache_path,
     log_indent = 1)
 
+  cv_results$estimates$ilammscad <- compute_ilamm(
+    y = simdat$y, x = simdat$x,
+    nlambda = PENALTY_LEVELS,
+    penalty = 'SCAD',
+    seed = args$job,
+    cv_k = CV_K,
+    cv_repl = CV_REPL,
+    cache_path = job_cache_path,
+    log_indent = 1)
+
   ## Compute LS-EN estimates
   cv_results$estimates$en <- comp_glmnet(
     y = simdat$y, x = simdat$x,

@@ -315,8 +315,9 @@ compute_adammest_cv_zeta <- function (..., lambda_min_ratio, pense_ridge, zeta_s
 #' @param cache_path path for caching intermediate results.
 #' @param cv_k number of CV folds and train-test splits, the size of the test set is
 #'             roughly *n / nrepl*.
+#' @param penalty the penalty function to use for `ILAMM::cvNcvxHuberReg()`.
 compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
-                           log_indent = 0L) {
+                           penalty = 'Lasso', log_indent = 0L) {
   if (!require('Matrix', quietly = TRUE)) {
     stop('`Matrix` package not available')
   }
@@ -324,10 +325,10 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
     stop('`ILAMM` package not available')
   }
 
-  print_log("Computing I-LAMM estimate.", .indent = log_indent)
+  print_log("Computing I-LAMM estimate (%s).", penalty, .indent = log_indent)
 
   try_catch({
-    cache <- load_cache('%010d,%010d,%010d', seed, cv_k, cv_repl,
+    cache <- load_cache('%010d,%010d,%010d,%s', seed, cv_k, cv_repl, penalty,
                         .prefix = 'ilamm_', .cache_path = cache_path,
                         .indent = log_indent + 1L)
 
@@ -335,13 +336,13 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
       cache$object
     } else {
       set.seed(seed)
-      ilr <- ILAMM::cvNcvxHuberReg(x, y, nlambda = nlambda, penalty = 'Lasso', nfolds = cv_k,
+      ilr <- ILAMM::cvNcvxHuberReg(x, y, nlambda = nlambda, penalty = penalty, nfolds = cv_k,
                                    intercept = TRUE)
 
       if (cv_repl > 1L) {
         mae <- vapply(seq_len(cv_repl - 1), FUN.VALUE = ilr$mae, FUN = function (.) {
           perm <- sample.int(length(y))
-          ILAMM::cvNcvxHuberReg(x[perm, ], y[perm], nlambda = nlambda, penalty = 'Lasso',
+          ILAMM::cvNcvxHuberReg(x[perm, ], y[perm], nlambda = nlambda, penalty = penalty,
                                 nfolds = cv_k, intercept = TRUE)$mae
         })
 
@@ -351,7 +352,7 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
         })
         best_hp <- arrayInd(which.min(mae_stat['mean', , , drop = TRUE]), dim(mae_stat)[-1L])
         repl_ilr <- ILAMM::ncvxHuberReg(x, y, intercept = TRUE,
-                                        penalty = 'Lasso',
+                                        penalty = penalty,
                                         lambda = ilr$lambdaSeq[[best_hp[[1]]]],
                                         tau = ilr$tauSeq[[best_hp[[2]]]])
         ilr <- repl_ilr
