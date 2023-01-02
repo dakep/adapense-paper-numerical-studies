@@ -42,6 +42,7 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
   }
 
   # Run for every `alpha`
+  all_alpha_start <- proc.time()[["elapsed"]]
   all_alpha_results <- lapply(alpha, function (alpha) {
     print_log("Computing %s estimate for alpha=%0.2f.", est_name, alpha,
               .indent = log_indent)
@@ -57,15 +58,18 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
       } else {
         # Set the seed so that we get the same CV splits for every alpha
         set.seed(seed)
+        alpha_start <- proc.time()[["elapsed"]]
         estimates <- pense_cv(..., alpha = alpha, penalty_loadings = penalty_loadings,
                               sparse = sparse, max_solutions = max_solutions, cv_k = cv_k,
                               cv_repl = cv_repl, enpy_opts = enpy_opts,
                               algorithm_opts = algorithm_opts)
+        alpha_end <- proc.time()[["elapsed"]]
 
         pense_alpha_res <- extract_pense_cv_coef(estimates,
                                                  lambda = if (isTRUE(cv_repl > 1)) c('min', 'se')
                                                  else 'min',
                                                  zeta = zeta)
+        pense_alpha_res$duration <- alpha_end - alpha_start
         print_log("Saving results to cache file '%s'.", cache$file, .indent = log_indent + 1L)
         saveRDS(pense_alpha_res, file = cache$file)
 
@@ -73,6 +77,7 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
       }
     })
   })
+  all_alpha_end <- proc.time()[["elapsed"]]
 
   # Select the best alpha value
   try_catch({
@@ -89,6 +94,9 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
         return(est)
       })
     }
+
+    adapense_ests$cv_min$duration_all_alpha <- all_alpha_end - all_alpha_start
+    adapense_ests$cv_se$duration_all_alpha <- all_alpha_end - all_alpha_start
 
     adapense_ests
   })
@@ -144,6 +152,7 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
   })
 
   # Run for every `alpha`
+  all_alpha_start <- proc.time()[["elapsed"]]
   all_alpha_results <- lapply(alpha, function (alpha) {
     print_log("Computing %s estimate for alpha=%0.2f.", est_name, alpha,
               .indent = log_indent)
@@ -159,17 +168,19 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
       } else {
         # Set the seed so that we get the same CV splits for every alpha
         set.seed(seed)
+        alpha_start <- proc.time()[["elapsed"]]
         estimates <- regmest_cv(..., penalty_loadings = penalty_loadings, scale = scale,
                                 starting_points = ridge_starting_point,
                                 alpha = alpha, sparse = sparse, max_solutions = max_solutions,
                                 cv_k = cv_k, cv_repl = cv_repl,
                                 algorithm_opts = algorithm_opts)
+        alpha_end <- proc.time()[["elapsed"]]
 
         mmest_alpha_res <- extract_pense_cv_coef(estimates,
                                                  lambda = if (isTRUE(cv_repl > 1)) c('min', 'se')
                                                  else 'min',
                                                  zeta = zeta)
-
+        mmest_alpha_res$duration <- alpha_end - alpha_start
         print_log("Saving results to cache file '%s'.", cache$file, .indent = log_indent + 1L)
         saveRDS(mmest_alpha_res, file = cache$file)
 
@@ -177,6 +188,7 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
       }
     })
   })
+  all_alpha_end <- proc.time()[["elapsed"]]
 
   try_catch({
     # Select the best alpha value
@@ -193,6 +205,8 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
         return(est)
       })
     }
+    adamm_ests$cv_min$duration_all_alpha <- all_alpha_end - all_alpha_start
+    adamm_ests$cv_se$duration_all_alpha <- all_alpha_end - all_alpha_start
 
     adamm_ests
   })
@@ -254,14 +268,23 @@ compute_adapense_cv_zeta <- function (..., alpha, zeta_seq,
                                    log_indent = log_indent + 1L, ...)
       lapply(adapr, function (x) {
         x$zeta <- zeta
+        x$duration_prelim <- prelim_pense$cv_min$duration_all_alpha
         return(x)
       })
     })
   })
+  duration_all_zeta <- sum(vapply(zeta_results, FUN.VALUE = numeric(1),
+                                  FUN = `[[`, 'duration_all_alpha'))
 
-  try_catch(list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
-                 cv_se = get_best_estimate(zeta_results, 'cv_se'),
-                 preliminary = prelim_pense))
+  try_catch({
+    res <- list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
+                cv_se = get_best_estimate(zeta_results, 'cv_se'),
+                preliminary = prelim_pense)
+    res$cv_min$duration_all_zeta <- duration_all_zeta
+    res$cv_se$duration_all_zeta <- duration_all_zeta
+
+    res
+  })
 }
 
 
@@ -298,13 +321,25 @@ compute_adammest_cv_zeta <- function (..., lambda_min_ratio, pense_ridge, zeta_s
                                    zeta = zeta, log_indent = log_indent + 1L, ...)
       lapply(adamm, function (x) {
         x$zeta <- zeta
+        x$duration_prelim <- pense_ridge$duration_all_alpha
         return(x)
       })
     })
   })
+  duration_all_zeta <- sum(vapply(zeta_results, FUN.VALUE = numeric(1),
+                                  FUN = `[[`, 'duration_all_alpha'))
 
-  try_catch(list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
-                 cv_se = get_best_estimate(zeta_results, 'cv_se')))
+  try_catch({
+    res <- list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
+                cv_se = get_best_estimate(zeta_results, 'cv_se'))
+
+    res$cv_min$duration_all_zeta <- duration_all_zeta
+    res$cv_se$duration_all_zeta <- duration_all_zeta
+
+    res
+  })
+
+
 }
 
 #' Compute I-LAMM Estimates
@@ -336,6 +371,7 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
       cache$object
     } else {
       set.seed(seed)
+      start <- proc.time()[["elapsed"]]
       ilr <- ILAMM::cvNcvxHuberReg(x, y, nlambda = nlambda, penalty = penalty, nfolds = cv_k,
                                    intercept = TRUE)
 
@@ -357,13 +393,15 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
                                         tau = ilr$tauSeq[[best_hp[[2]]]])
         ilr <- repl_ilr
       }
+      end <- proc.time()[["elapsed"]]
 
       nnz_ind <- which(abs(ilr$beta[-1]) > 1e-12)
 
       est <- with(ilr, list(
         intercept = beta[[1]],
         beta = sparseVector(beta[1 + nnz_ind], nnz_ind, length(beta) - 1),
-        pred_err = min(mae / length(y))
+        pred_err = min(mae / length(y)),
+        duration = end - start
       ))
 
       print_log("Saving results to cache file '%s'.", cache$file, .indent = log_indent + 1L)
@@ -407,11 +445,13 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
         rep.int(1, ncol(x))
       }
 
+      all_alpha_start <- proc.time()[["elapsed"]]
       en_res <- lapply(alpha, function (alpha) {
         print_log("Computing %s estimate for alpha=%.2f and zeta=%f.", est_name, alpha,
                   zeta, .indent = log_indent + 1L)
 
         set.seed(seed)
+        start <- proc.time()[["elapsed"]]
         cv_res <- glmnet::cv.glmnet(x = x, y = y, nlambda = nlambda, alpha = alpha,
                                     type.measure = 'mae', nfolds = cv_k,
                                     penalty.factor = pen_fact,
@@ -437,6 +477,7 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
           cv_res$cvup <- cv_res$cvm + cv_res$cvsd
           cv_res$cvlo <- cv_res$cvm - cv_res$cvsd
         }
+        end <- proc.time()[["elapsed"]]
 
         glmnet_coefs_min <- coef(cv_res, 'lambda.min')
         glmnet_coefs_se <- coef(cv_res, 'lambda.1se')
@@ -445,14 +486,17 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
                                             length = glmnet_coefs_min@Dim[[1]] - 1L),
                         alpha = alpha,
                         zeta = zeta,
-                        pred_err = cv_res$cvm[[cv_res$index['min', 1L]]]),
+                        pred_err = cv_res$cvm[[cv_res$index['min', 1L]]],
+                        duration = end - start),
              se = list(intercept = glmnet_coefs_se@x[[1]],
                        beta = sparseVector(glmnet_coefs_se@x[-1], glmnet_coefs_se@i[-1],
                                            length = glmnet_coefs_se@Dim[[1]] - 1L),
                        alpha = alpha,
                        zeta = zeta,
-                       pred_err = cv_res$cvm[[cv_res$index['1se', 1L]]]))
+                       pred_err = cv_res$cvm[[cv_res$index['1se', 1L]]],
+                       duration = end - start))
       })
+      all_alpha_end <- proc.time()[["elapsed"]]
 
       print_log("Saving results to cache file '%s'.", cache$file, .indent = log_indent + 1L)
       saveRDS(en_res, file = cache$file)
@@ -461,8 +505,15 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
     }
   })
 
-  try_catch(list(cv_min = get_best_estimate(en_res, 'min'),
-                 cv_se = get_best_estimate(en_res, 'se')))
+  try_catch({
+    res <- list(cv_min = get_best_estimate(en_res, 'min'),
+                cv_se = get_best_estimate(en_res, 'se'))
+
+    res$cv_min$duration_all_alpha <- all_alpha_end - all_alpha_start
+    res$cv_se$duration_all_alpha <- all_alpha_end - all_alpha_start
+
+    res
+  })
 }
 
 #' Compute the Classical EN estimator
@@ -494,19 +545,30 @@ comp_glmnet_zeta <- function (x, ..., alpha, zeta_seq, zeta, penalty_loadings,
       if (any(!is.finite(pen_loadings))) {
         pen_loadings[!is.finite(pen_loadings)] <- max(pen_loadings[is.finite(pen_loadings)])
       }
+
       adaen <- comp_glmnet(x = x, penalty_loadings = pen_loadings,
                            alpha = alpha, zeta = zeta, log_indent = log_indent + 1L,
                            ...)
       lapply(adaen, function (x) {
         x$zeta <- zeta
+        x$duration_preliminary <- prelim_en$cv_min$duration_all_alpha
         return(x)
       })
     })
   })
+  duration_all_zeta <- sum(vapply(zeta_results, FUN.VALUE = numeric(1),
+                                  FUN = `[[`, 'duration_all_alpha'))
 
-  try_catch(list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
-                 cv_se = get_best_estimate(zeta_results, 'cv_se'),
-                 preliminary = prelim_en))
+  try_catch({
+    res <- list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
+                cv_se = get_best_estimate(zeta_results, 'cv_se'),
+                preliminary = prelim_en)
+
+    res$cv_min$duration_all_zeta <- duration_all_zeta
+    res$cv_se$duration_all_zeta <- duration_all_zeta
+
+    res
+  })
 }
 
 #' Compute the intercept-only model using the M-location estimate
