@@ -3,6 +3,7 @@
 STYLE_COLOR <- c('EN' = 'green',
                  'Ada. EN' = 'green',
                  'I-LAMM' = 'gray',
+                 'I-LAMM (SCAD)' = 'gray',
                  'MM' = 'lightblue',
                  'Ada. MM' = 'lightblue',
                  'PENSE' = 'blue',
@@ -11,6 +12,7 @@ STYLE_COLOR <- c('EN' = 'green',
 STYLE_SHAPE <- c('EN' = 0,
                  'Ada. EN' = 15,
                  'I-LAMM' = 2,
+                 'I-LAMM (SCAD)' = 17,
                  'MM' = 5,
                  'Ada. MM' = 23,
                  'PENSE' = 1,
@@ -18,7 +20,8 @@ STYLE_SHAPE <- c('EN' = 0,
 
 STYLE_LINETYPE <- c('EN' = '22',
                     'Ada. EN' = 'solid',
-                    'I-LAMM' = 'solid',
+                    'I-LAMM' = '22',
+                    'I-LAMM (SCAD)' = 'solid',
                     'MM' = '22',
                     'Ada. MM' = 'solid',
                     'PENSE' = '22',
@@ -44,6 +47,7 @@ recode_method <- function (x) {
                 adapense = 'Ada. PENSE',
                 adamm = 'Ada. MM',
                 adaen = 'Ada. EN',
+                ilammscad = 'I-LAMM (SCAD)',
                 ilamm = 'I-LAMM',
                 pense = 'PENSE',
                 mm = 'MM',
@@ -64,12 +68,33 @@ recode_resid_dist <- function (x) {
 
 #' Colorblind-Friendly Color Palette
 #'
-#' A st of 9 colors which are somewhat easy to distinguish even with mild forms of common issues
+#' A list of 9 colors which are somewhat easy to distinguish even with mild forms of common issues
 #' in color-perception.
 #'
 #' Although the colors are "friendly" for many different types of
 #' color-blindness, it's not guaranteed that the contrast between the colors
 #' is great for anyone!
+#' Therefore, these colors should not be the only differentiating factor between elements
+#' in a graph.
+#'
+#' The following colors are available:
+#'
+#' * `lightorange`
+#' * `lightblue`
+#' * `green`
+#' * `yellow`
+#' * `blue`
+#' * `orange`
+#' * `cyan`
+#' * `gray`
+#' * `lightgray`
+#'
+#' @param ... colors to choose (possibly named) (see examples).
+#'   If none are given, all colors are returned.
+#' @return a named vector with color codes
+#'
+#' @examples
+#' colorblind_cols(air = 'blue', fruit = 'orange')
 colorblind_cols <- function (...) {
   colors <- c(lightorange = '#E69F00',
               lightblue = '#56B4E9',
@@ -89,6 +114,13 @@ colorblind_cols <- function (...) {
   }
 }
 
+#' Create a Colorblind-Friendly Color Palette
+#'
+#' Similar to [colorblind_pal()], but returns a function
+#'
+#' @param values a named character vector of chosen colors.
+#' @return a function which takes the number of colors and returns a vector
+#'   of that length with the chosen colors.
 colorblind_pal <- function (values) {
   palette <- colorblind_cols()
   if (is.null(values)) {
@@ -117,10 +149,8 @@ colorblind_pal <- function (values) {
   }
 }
 
-#' @rdname colorblind_palette
-#' @description
-#'   `scale_color_colorblind()` ggplot2 color scale
-#' @export
+#' Colorblind-Friendly Color Palette to use with ggplot2
+#' See [colorblind_pal()] for available colors.
 scale_color_colorblind <- function(..., values = NULL) {
   if (!require('ggplot2', quietly = TRUE)) {
     stop("ggplot2 package not available")
@@ -128,10 +158,8 @@ scale_color_colorblind <- function(..., values = NULL) {
   discrete_scale('colour', 'colorblind', colorblind_pal(values), ...)
 }
 
-#' @rdname colorblind_palette
-#' @description
-#'   `scale_fill_colorblind()` ggplot2 fill scale
-#' @export
+#' Colorblind-Friendly Color Palette to use with ggplot2
+#' See [colorblind_pal()] for available colors.
 scale_fill_colorblind <- function(..., values = NULL) {
   if (!require('ggplot2', quietly = TRUE)) {
     stop("ggplot2 package not available")
@@ -142,7 +170,9 @@ scale_fill_colorblind <- function(..., values = NULL) {
 
 #' ggplot2 Theme Used For Plots In The Manuscript
 #'
-#' @param base_family,base_size see [theme_bw()][theme_bw()] for the meaning of these
+#' Theme based on the [ggplot2][theme_bw()] theme.
+#'
+#' @param base_family,base_size see [ggplot2][theme_bw()] for the meaning of these
 #'   parameters.
 ggplot_theme <- function(base_size = 12, base_family = '') {
   if (!require('ggplot2', quietly = TRUE)) {

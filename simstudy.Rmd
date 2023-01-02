@@ -38,6 +38,7 @@ custom_pdf <- function (filename, width, height) {
 }
 
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      error = TRUE,
                       dev = c('png', 'custom_pdf'),
                       fig.ext = c('png', 'pdf'))
 
@@ -571,9 +572,10 @@ scenario_2 %>%
 good_leverage <- load_results(file.path(RESULTS_PATH, 'good_leverage'))
 ```
 
-```{r good_leverage-sens_spec, out.width='100%', fig.width=7, fig.height=2.7}
+```{r good_leverage-sens_spec, out.width='100%', fig.width=7, fig.height=3.5}
 good_leverage %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM', method != 'Ada. MM', method != 'MM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'),
+         method != 'Ada. MM', method != 'MM') %>% 
   select(method, bad_lev_pos, ends_with('_cont')) %>%
   pivot_longer(ends_with('_cont'), names_to = c('what', 'cont'),
                names_pattern = '([senspc]+)_(.+)') %>% 
