@@ -445,7 +445,6 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
         rep.int(1, ncol(x))
       }
 
-      all_alpha_start <- proc.time()[["elapsed"]]
       en_res <- lapply(alpha, function (alpha) {
         print_log("Computing %s estimate for alpha=%.2f and zeta=%f.", est_name, alpha,
                   zeta, .indent = log_indent + 1L)
@@ -486,17 +485,15 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
                                             length = glmnet_coefs_min@Dim[[1]] - 1L),
                         alpha = alpha,
                         zeta = zeta,
-                        pred_err = cv_res$cvm[[cv_res$index['min', 1L]]],
-                        duration = end - start),
+                        pred_err = cv_res$cvm[[cv_res$index['min', 1L]]]),
              se = list(intercept = glmnet_coefs_se@x[[1]],
                        beta = sparseVector(glmnet_coefs_se@x[-1], glmnet_coefs_se@i[-1],
                                            length = glmnet_coefs_se@Dim[[1]] - 1L),
                        alpha = alpha,
                        zeta = zeta,
-                       pred_err = cv_res$cvm[[cv_res$index['1se', 1L]]],
-                       duration = end - start))
+                       pred_err = cv_res$cvm[[cv_res$index['1se', 1L]]]),
+             duration = end - start)
       })
-      all_alpha_end <- proc.time()[["elapsed"]]
 
       print_log("Saving results to cache file '%s'.", cache$file, .indent = log_indent + 1L)
       saveRDS(en_res, file = cache$file)
@@ -504,13 +501,15 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
       en_res
     }
   })
+  duration_all_alpha <- sum(vapply(all_alpha_results, FUN.VALUE = numeric(1),
+                                   FUN = `[[`, 'duration'))
 
   try_catch({
     res <- list(cv_min = get_best_estimate(en_res, 'min'),
                 cv_se = get_best_estimate(en_res, 'se'))
 
-    res$cv_min$duration_all_alpha <- all_alpha_end - all_alpha_start
-    res$cv_se$duration_all_alpha <- all_alpha_end - all_alpha_start
+    res$cv_min$duration_all_alpha <- duration_all_alpha
+    res$cv_se$duration_all_alpha <- duration_all_alpha
 
     res
   })
