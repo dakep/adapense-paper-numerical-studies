@@ -694,13 +694,14 @@ try_catch <- function (expr, env = parent.frame()) {
   if (!requireNamespace('methods', quietly = TRUE)) {
     stop("Package `methods` is required.")
   }
-  res <- try(rlang::with_abort(eval(expr, envir = env)), silent = TRUE)
-  if (methods::is(res, 'try-error')) {
-    cnd <- attr(res, 'condition', exact = TRUE)
-    if (!is.null(cnd)) {
-      print(cnd, simplify = 'branch')
-    }
-    return(NULL)
-  }
-  res
+  rlang::try_fetch(eval(expr, envir = env),
+                   error = function (cnd) {
+                     rlang::try_fetch(
+                       rlang::abort("Error:", parent = cnd),
+                       error = function (cnd) {
+                         print(cnd, simplify = 'branch')
+                         NULL
+                       })
+                     NULL
+                   })
 }
