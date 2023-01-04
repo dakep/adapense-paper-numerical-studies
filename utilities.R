@@ -501,7 +501,7 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
       en_res
     }
   })
-  duration_all_alpha <- sum(vapply(all_alpha_results, FUN.VALUE = numeric(1),
+  duration_all_alpha <- sum(vapply(en_res, FUN.VALUE = numeric(1),
                                    FUN = `[[`, 'duration'))
 
   try_catch({
