@@ -32,7 +32,7 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
   est_name <- if (is.null(penalty_loadings)) { 'PENSE' } else { 'adaptive PENSE' }
 
   if (is.null(en_algo_opts)) {
-    en_algo_opts <- en_lars_options()
+    en_algo_opts <- en_cd_options()
   }
   if (missing(algorithm_opts)) {
     algorithm_opts <- mm_algorithm_options(en_algorithm_opts = en_algo_opts)
@@ -42,7 +42,6 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
   }
 
   # Run for every `alpha`
-  all_alpha_start <- proc.time()[["elapsed"]]
   all_alpha_results <- lapply(alpha, function (alpha) {
     print_log("Computing %s estimate for alpha=%0.2f.", est_name, alpha,
               .indent = log_indent)
@@ -77,7 +76,8 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
       }
     })
   })
-  all_alpha_end <- proc.time()[["elapsed"]]
+  duration_all_alpha <- sum(vapply(all_alpha_results, FUN.VALUE = numeric(1),
+                                   FUN = `[[`, 'duration'))
 
   # Select the best alpha value
   try_catch({
@@ -95,8 +95,8 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
       })
     }
 
-    adapense_ests$cv_min$duration_all_alpha <- all_alpha_end - all_alpha_start
-    adapense_ests$cv_se$duration_all_alpha <- all_alpha_end - all_alpha_start
+    adapense_ests$cv_min$duration_all_alpha <- duration_all_alpha
+    adapense_ests$cv_se$duration_all_alpha <- duration_all_alpha
 
     adapense_ests
   })
@@ -131,7 +131,7 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
   est_name <- if (is.null(penalty_loadings)) { 'MM' } else { 'adaptive MM' }
 
   if (is.null(en_algo_opts)) {
-    en_algo_opts <- en_lars_options()
+    en_algo_opts <- en_cd_options()
   }
 
   if (missing(algorithm_opts)) {
@@ -152,7 +152,6 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
   })
 
   # Run for every `alpha`
-  all_alpha_start <- proc.time()[["elapsed"]]
   all_alpha_results <- lapply(alpha, function (alpha) {
     print_log("Computing %s estimate for alpha=%0.2f.", est_name, alpha,
               .indent = log_indent)
@@ -188,7 +187,8 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
       }
     })
   })
-  all_alpha_end <- proc.time()[["elapsed"]]
+  duration_all_alpha <- sum(vapply(all_alpha_results, FUN.VALUE = numeric(1),
+                                   FUN = `[[`, 'duration'))
 
   try_catch({
     # Select the best alpha value
@@ -205,8 +205,8 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
         return(est)
       })
     }
-    adamm_ests$cv_min$duration_all_alpha <- all_alpha_end - all_alpha_start
-    adamm_ests$cv_se$duration_all_alpha <- all_alpha_end - all_alpha_start
+    adamm_ests$cv_min$duration_all_alpha <- duration_all_alpha
+    adamm_ests$cv_se$duration_all_alpha <- duration_all_alpha
 
     adamm_ests
   })
@@ -274,7 +274,7 @@ compute_adapense_cv_zeta <- function (..., alpha, zeta_seq,
     })
   })
   duration_all_zeta <- sum(vapply(zeta_results, FUN.VALUE = numeric(1),
-                                  FUN = `[[`, 'duration_all_alpha'))
+                                  FUN = function (x) x$cv_min$duration_all_alpha))
 
   try_catch({
     res <- list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
@@ -327,7 +327,7 @@ compute_adammest_cv_zeta <- function (..., lambda_min_ratio, pense_ridge, zeta_s
     })
   })
   duration_all_zeta <- sum(vapply(zeta_results, FUN.VALUE = numeric(1),
-                                  FUN = `[[`, 'duration_all_alpha'))
+                                  FUN = function (x) x$cv_min$duration_all_alpha))
 
   try_catch({
     res <- list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
