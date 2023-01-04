@@ -557,7 +557,7 @@ comp_glmnet_zeta <- function (x, ..., alpha, zeta_seq, zeta, penalty_loadings,
     })
   })
   duration_all_zeta <- sum(vapply(zeta_results, FUN.VALUE = numeric(1),
-                                  FUN = `[[`, 'duration_all_alpha'))
+                                  FUN = function (x) x$cv_min$duration_all_alpha)
 
   try_catch({
     res <- list(cv_min = get_best_estimate(zeta_results, 'cv_min'),
