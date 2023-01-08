@@ -196,6 +196,16 @@ for (job in unique(args$job)) {
     cv_repl = CV_REPL,
     cache_path = job_cache_path)
 
+  ## Compute ILAMM (SCAD) estimates
+  cv_results$estimates$ilamm_scad <- compute_ilamm(
+    y = train_glass_y, x = train_glass_x,
+    nlambda = PENALTY_LEVELS,
+    seed = job_seed,
+    cv_k = CV_K,
+    cv_repl = CV_REPL,
+    penalty = 'SCAD',
+    cache_path = job_cache_path)
+
   ## Compute LS-EN estimates
   cv_results$estimates$en <- comp_glmnet(
     y = train_glass_y, x = train_glass_x,

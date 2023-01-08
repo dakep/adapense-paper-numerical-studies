@@ -119,15 +119,16 @@ To compute the estimates for the 15th replication using 4 CPUs, for example, the
 Rscript simstudy-scenario_1.R --ncores 4 --job 15 --
 ```
 
-One job requires approximately 600 CPU hours for scenario 1 (scenario 2 takes only 30 CPU hours).
-By default, the script uses the result path *results/simstudy*, and in this case the result files are stored under *results/simstudy/scenario_02/{job_setting_id}.rds*, where *{job_setting_id}* is a unique identifier for the job and setting.
+One job requires approximately 70 CPU hours for scenario 1.
+Scenario 2 takes about 15 CPU hours.
+By default, the script uses the result path *results/simstudy*, and in this case the result files are stored under *results/simstudy/scenario_01/{job_setting_id}.rds*, where *{job_setting_id}* is a unique identifier for the job and setting.
 
 On HPC systems using the SLURM workload manager, the results for can be replicated with
 
 ```sh
 sbatch \
   --array=1-50 \
-  --time=6:12:00:00 \
+  --time=24:00:00 \
   --output="logs/simstudy/scenario_1-%a.out" \
   --error="logs/simstudy/scenario_1-%a.err" \
   --open-mode=append \
@@ -144,7 +145,8 @@ For example, to re-compute results for the 22nd replication, the script would be
 Rscript simstudy-good_leverage.R --ncores 4 --job 22 --
 ```
 
-This script runs for about 16 CPU hours and saves result files under *results/simstudy/good_leverage*.
+This job takes approximately 5 CPU hours.
+Result files are saved under *results/simstudy/good_leverage*.
 
 #### Re-creating the figures and tables
 
