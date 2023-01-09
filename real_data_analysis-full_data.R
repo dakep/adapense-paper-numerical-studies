@@ -150,6 +150,16 @@ estimates$ilamm <- compute_ilamm(
   cv_repl = CV_REPL,
   cache_path = CACHE_PATH)
 
+## Compute ILAMM (SCAD) estimates
+estimates$ilamm_scad <- compute_ilamm(
+  y = glass_y, x = glass_x,
+  nlambda = PENALTY_LEVELS,
+  seed = BASE_SEED,
+  cv_k = CV_K,
+  cv_repl = CV_REPL,
+  penalty = 'SCAD',
+  cache_path = CACHE_PATH)
+
 ## Compute LS-EN estimates
 estimates$en <- comp_glmnet(
   y = glass_y, x = glass_x,

@@ -69,7 +69,7 @@ Assuming the `--result-dir` argument is *results/real_da*, the script saves the 
 This repository contains all 300 result files computed for the manuscript (*0001-01.rds* to *0050-06.rds*).
 
 For the manuscript, a total of 50 replications of 6 fold CV were performed (jobs 1 to 300).
-Each job takes ~14 CPU hours.
+Each job takes ~3 CPU hours.
 To replicate all results in the manuscript, the R script must be called for each job:
 
 ```sh
@@ -87,7 +87,7 @@ sbatch \
   --array=1-300 \
   --time=2:30:00 \
   --output="logs/real_da/prediction_error-%a.out" \
-  --error="logs/real_da/prediction_error-%a.err" \ \
+  --error="logs/real_da/prediction_error-%a.err"  \
   --open-mode=append \
   real_data_analysis-slurm_cv.sh
 ```
