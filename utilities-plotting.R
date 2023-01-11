@@ -48,6 +48,7 @@ recode_method <- function (x) {
                 adamm = 'Ada. MM',
                 adaen = 'Ada. EN',
                 ilammscad = 'I-LAMM (SCAD)',
+                ilamm_scad = 'I-LAMM (SCAD)',
                 ilamm = 'I-LAMM',
                 pense = 'PENSE',
                 mm = 'MM',

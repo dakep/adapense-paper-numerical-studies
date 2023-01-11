@@ -210,6 +210,17 @@ for (resid_dist in SIM_RESID_DIST) {
         cache_path = job_cache_path,
         log_indent = 1)
 
+      ## Compute ILAMM (SCAD) estimates
+      cv_results$estimates$ilamm_scad <- compute_ilamm(
+        y = simdat$y, x = simdat$x,
+        nlambda = PENALTY_LEVELS,
+        seed = args$job,
+        cv_k = CV_K,
+        cv_repl = CV_REPL,
+        cache_path = job_cache_path,
+        penalty = 'SCAD',
+        log_indent = 1)
+
       ## Compute LS-EN estimates
       cv_results$estimates$en <- comp_glmnet(
         y = simdat$y, x = simdat$x,
