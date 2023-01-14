@@ -66,10 +66,10 @@ generate_data_scenario_3 <- function (n, test_n = 1000, test_seed = 7357) {
   settings <- list(
     n = n,
     p = SIM_P,
-    s = floor(0.9 * sqrt(p)),
+    s = floor(0.9 * sqrt(SIM_P)),
     cont = SIM_CONT_PROP,
     k_vert = -1,
-    bad_lev_p = log2(p),
+    bad_lev_p = log2(SIM_P),
     bad_lev_p_relevant = 0,
     bad_lev_pos = 2,
     good_lev_p = NA_integer_,
