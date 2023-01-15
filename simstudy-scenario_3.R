@@ -90,7 +90,7 @@ if (!dir.exists(args$results_dir)) {
 }
 
 ## Run all combinations for the given seed
-for (n in SIM_P) {
+for (n in SIM_N) {
   job_id <- sprintf('s=%05d-n=%05d', args$job, n)
   job_hash <- digest(job_id, serialize = TRUE)
   job_fname <- paste(str_replace_all(job_id, '[^a-zA-Z0-9-_]+', '_'),
