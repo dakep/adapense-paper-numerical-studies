@@ -352,12 +352,20 @@ compute_adammest_cv_zeta <- function (..., lambda_min_ratio, pense_ridge, zeta_s
 #'             roughly *n / nrepl*.
 #' @param penalty the penalty function to use for `ILAMM::cvNcvxHuberReg()`.
 compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
-                           penalty = 'Lasso', log_indent = 0L) {
+                           penalty = 'Lasso', log_indent = 0L, ncores = 1) {
   if (!require('Matrix', quietly = TRUE)) {
     stop('`Matrix` package not available')
   }
   if (!requireNamespace('ILAMM', quietly = TRUE)) {
     stop('`ILAMM` package not available')
+  }
+
+  if (isTRUE(ncores > 1L)) {
+    cl <- parallel::makeCluster(ncores)
+    on.exit(parallel::stopCluster(cl))
+    lapply <- function (X, FUN, ...) {
+      parallel::clusterApply(cl, x = X, fun = FUN, ...)
+    }
   }
 
   print_log("Computing I-LAMM estimate (%s).", penalty, .indent = log_indent)
@@ -376,13 +384,17 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
                                    intercept = TRUE)
 
       if (cv_repl > 1L) {
-        mae <- vapply(seq_len(cv_repl - 1), FUN.VALUE = ilr$mae, FUN = function (.) {
-          perm <- sample.int(length(y))
-          ILAMM::cvNcvxHuberReg(x[perm, ], y[perm], nlambda = nlambda, penalty = penalty,
+        mae <- lapply(seq_len(cv_repl - 1), function (., .x, .y, nlambda,
+                                               penalty, cv_k) {
+          perm <- sample.int(length(.y))
+          ILAMM::cvNcvxHuberReg(.x[perm, ], .y[perm], nlambda = nlambda,
+                                penalty = penalty,
                                 nfolds = cv_k, intercept = TRUE)$mae
-        })
+        }, .x = x, .y = y, nlambda = nlambda, penalty = penalty, cv_k = cv_k)
 
-        mae <- array(c(ilr$mae, mae), dim = dim(mae) + c(0L, 0L, 1L))
+        mae <- array(c(ilr$mae, unlist(mae, recursive = FALSE, use.names = FALSE)),
+                     dim = c(dim(ilr$mae), cv_repl))
+
         mae_stat <- apply(mae, c(1, 2), function (x) {
           c(mean = mean(x), sd = sd(x))
         })

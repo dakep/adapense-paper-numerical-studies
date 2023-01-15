@@ -31,7 +31,7 @@ CACHE_PATH <- file.path(args$results_dir, 'cache')
 
 ## Estimator settings
 CV_K <- 5L # use 5-fold cross-validation
-CV_REPL <- 10L # replicate CV 10 times
+CV_REPL <- 20L # replicate CV 20 times
 ALPHA_SEQUENCE <- c(0.5, 0.75, 1) # alpha parameters for EN-type estimators
 ZETA_SEQUENCE <- c(1, 2)  # sequence of zeta parameters for adaptive estimators
 NUMERIC_EPS <- 1e-6
@@ -42,6 +42,7 @@ PENSE_BDP <- 1/3  # desired breakdown point
 
 ## Determine the parallelization (threading or multiple processes)
 if (args$ncores > 1L) {
+  args$total_ncores <- args$ncores
   if (pense:::.k_multithreading_support) {
     args$cluster <- NULL
   } else {
@@ -49,6 +50,7 @@ if (args$ncores > 1L) {
     args$ncores <- 1L
   }
 } else {
+  args$total_ncores <- 1L
   args$ncores <- 1L
   args$cluster <- NULL
 }
@@ -88,6 +90,8 @@ generate_data_scenario_2 <- function (p, resid_dist, contamination_percentage,
 if (!dir.exists(args$results_dir)) {
   dir.create(args$results_dir, recursive = TRUE, mode = '0700')
 }
+
+en_algo_opts <- en_lars_options()
 
 ## Run all combinations for the given seed
 for (resid_dist in SIM_RESID_DIST) {
@@ -142,6 +146,7 @@ for (resid_dist in SIM_RESID_DIST) {
         ncores = args$ncores,
         cl = args$cluster,
         eps = NUMERIC_EPS,
+        en_algo_opts = en_algo_opts,
         cache_path = job_cache_path,
         penalty_loadings = NULL,
         log_indent = 1)
@@ -162,6 +167,7 @@ for (resid_dist in SIM_RESID_DIST) {
         ncores = args$ncores,
         cl = args$cluster,
         eps = NUMERIC_EPS,
+        en_algo_opts = en_algo_opts,
         cache_path = job_cache_path,
         log_indent = 1)
 
@@ -179,6 +185,7 @@ for (resid_dist in SIM_RESID_DIST) {
         ncores = args$ncores,
         cl = args$cluster,
         eps = NUMERIC_EPS,
+        en_algo_opts = en_algo_opts,
         cache_path = job_cache_path,
         log_indent = 1)
 
@@ -197,6 +204,7 @@ for (resid_dist in SIM_RESID_DIST) {
         ncores = args$ncores,
         cl = args$cluster,
         eps = NUMERIC_EPS,
+        en_algo_opts = en_algo_opts,
         cache_path = job_cache_path,
         log_indent = 1)
 
@@ -207,6 +215,7 @@ for (resid_dist in SIM_RESID_DIST) {
         seed = args$job,
         cv_k = CV_K,
         cv_repl = CV_REPL,
+        ncores = args$total_ncores,
         cache_path = job_cache_path,
         log_indent = 1)
 
@@ -217,6 +226,7 @@ for (resid_dist in SIM_RESID_DIST) {
         seed = args$job,
         cv_k = CV_K,
         cv_repl = CV_REPL,
+        ncores = args$total_ncores,
         cache_path = job_cache_path,
         penalty = 'SCAD',
         log_indent = 1)

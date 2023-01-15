@@ -33,7 +33,7 @@ custom_pdf <- function (filename, width, height) {
     dir.create(FIGURE_PATH)
   }
   fname <- file.path(FIGURE_PATH, paste0('simstudy-', basename(filename)))
-  fname <- str_replace(fname, fixed('-1.pdf'), '.pdf')
+  fname <- str_replace(fname, coll('-1.pdf'), '.pdf')
   pdf_fun(filename = fname, width = width, height = height)
 }
 
@@ -112,6 +112,8 @@ extract_estimate_stats <- function (estimates, job, .id = NULL) {
                zeta = x$zeta %||% NA_real_,
                alpha = x$alpha %||% NA_real_, 
                bdp = x$bdp %||% NA_real_,
+               duration = x$duration_all_zeta %||% x$duration_all_alpha %||%
+                 NA_real_,
                varsel = list(varsel_stats(x$beta, job)))
       }
     } else {
@@ -186,7 +188,7 @@ plot_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg = median,
                fun.data = function (x) {
                  data.frame(y = avg(x))
                }) +
-    geom_errorbar(size = 2/3, width = 0.5,
+    geom_errorbar(linewidth = 2/3, width = 0.5,
                   position = position_dodge(width = 0.8), stat = 'summary',
                   fun.data = function (x) {
                     q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
@@ -207,7 +209,9 @@ plot_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg = median,
          y = "Relative scale of the prediction error") +
     ggplot_theme(base_size = base_size) +
     theme(panel.grid.major.x = element_blank(),
-          panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
+          panel.grid.minor.x = element_line(color = "gray30",  
+                                            linewidth = rel(0.5), 
+                                            linetype = '21'),
           axis.ticks.x = element_blank(),
           legend.margin = margin(),
           legend.position = 'bottom')
@@ -244,7 +248,7 @@ plot_relative_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg 
   plot_obj <- ggplot(plot_d, aes(x = as.integer(p_s_str), y = pred_err_diff,
                                  color = method, shape = method, fill = method)) +
     geom_hline(yintercept = 0, color = colorblind_cols(STYLE_COLOR[baseline]), 
-               linetype = '22', size = 0.5) +
+               linetype = '22', linewidth = 0.5) +
     geom_point(position = position_dodge(width = 0.8),
                size = 1/2, alpha = 2/3) +
     geom_point(size = 2.5, position = position_dodge(width = 0.8), stat = 'summary',
@@ -274,7 +278,9 @@ plot_relative_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg 
          y = sprintf("Difference in prediction accuracy\nrelative to the accuracy of %s", baseline)) +
     ggplot_theme(base_size = 11) +
     theme(panel.grid.major.x = element_blank(),
-          panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
+          panel.grid.minor.x = element_line(color = "gray30", 
+                                            linewidth = rel(0.5), 
+                                            linetype = '21'),
           axis.ticks.x = element_blank(),
           legend.margin = margin(),
           legend.position = 'bottom')
@@ -336,7 +342,9 @@ plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE,
     coord_cartesian(ylim = ylim) +
     ggplot_theme(base_size = base_size) +
     theme(panel.grid.major.x = element_blank(),
-          panel.grid.minor.x = element_line(color = "gray30", size = rel(0.5), linetype = '21'),
+          panel.grid.minor.x = element_line(color = "gray30", 
+                                            linewidth = rel(0.5), 
+                                            linetype = '21'),
           axis.ticks.x = element_blank(),
           legend.position = 'bottom',
           legend.margin = margin(),
@@ -430,7 +438,8 @@ scenario_1 %>%
 
 ```{r scenario_1-prediction_accuracy-selected, fig.width=7, fig.height=2.8, out.width='100%'}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM',
+  filter(cv_type == 'se' |
+           str_starts(method, 'I-LAMM'),
          !str_ends(method, fixed('EN')),
          !str_starts(resid_dist, fixed('Normal'))) %>% 
   mutate(resid_dist = fct_relabel(resid_dist, str_replace,
@@ -441,13 +450,13 @@ scenario_1 %>%
 
 ```{r scenario_1-prediction_accuracy, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   plot_pred_perf(ylim = c(1, 1.2))
 ```
 
 ```{r scenario_1-prediction_accuracy-relative, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   plot_relative_pred_perf(ylim = c(-0.2, 0.2))
 ```
 
@@ -455,7 +464,7 @@ scenario_1 %>%
 
 ```{r scenario_1-mcc-selected, out.width='100%', fig.width=7, fig.height=2.8}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM',
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'),
          !str_ends(method, fixed('EN')),
          !str_starts(resid_dist, fixed('Normal'))) %>% 
   mutate(resid_dist = fct_relabel(resid_dist, str_replace,
@@ -467,14 +476,14 @@ scenario_1 %>%
 
 ```{r scenario_1-mcc, out.width='100%', fig.width=7, fig.height=4.6}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   plot_any_pct(mcc, ylab = 'MCC of variable selection', pct = FALSE, avg = median)
 ```
 
 
 ```{r scenario_1-sens_spec, out.width='100%', fig.width=8, fig.height=4.75}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>%
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>%
   {
     sens <- plot_any_pct(., sens, ylab = 'Sensitivity', base_size = 12) +
       labs(title = "(a) Sensitivity")
@@ -525,13 +534,13 @@ scenario_2 %>%
 
 ```{r scenario_2-prediction_accuracy, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_2 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   plot_pred_perf(ylim = c(1, 2))
 ```
 
 ```{r scenario_2-prediction_accuracy-relative, fig.width=7, fig.height=4.6, out.width='100%'}
 scenario_2 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   plot_relative_pred_perf(ylim = c(-0.2, 0.5))
 ```
 
@@ -540,13 +549,13 @@ scenario_2 %>%
 
 ```{r scenario_2-mcc, out.width='100%', fig.width=7, fig.height=4.6}
 scenario_2 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   plot_any_pct(mcc, ylab = 'MCC of variable selection', pct = FALSE, avg = median)
 ```
 
 ```{r scenario_2-sens_spec, out.width='100%', fig.width=8, fig.height=4.75}
 scenario_2 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>%
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>%
   {
     sens <- plot_any_pct(., sens, ylab = 'Sensitivity', base_size = 12, avg = mean) +
       labs(title = "(a) Sensitivity")
@@ -594,7 +603,7 @@ good_leverage %>%
                           title.theme = element_text(face = 'bold', size = 9))
     ggplot(., aes(x = bad_lev_pos, y = avg, 
                   color = method, shape = method, linetype = method)) +
-      geom_line(size = 0.8) +
+      geom_line(linewidth = 0.8) +
       geom_point(size = 1.9) +
       scale_color_colorblind(values = STYLE_COLOR, guide = guide,
                              breaks = levels(.$method)) +
@@ -622,7 +631,7 @@ good_leverage %>%
 
 ```{r scenario_1-winners}
 scenario_1 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   mutate(rel_pred_accuracy = pred_err_tau_size / scale_true) %>% 
   {
     x <- .
@@ -638,7 +647,7 @@ scenario_1 %>%
 
 ```{r scenario_2-winners}
 scenario_2 %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM') %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
   mutate(rel_pred_accuracy = pred_err_tau_size / scale_true) %>% 
   {
     x <- .

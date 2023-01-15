@@ -31,7 +31,7 @@ CACHE_PATH <- file.path(args$results_dir, 'cache')
 
 ## Estimator settings
 CV_K <- 5L # use 5-fold cross-validation
-CV_REPL <- 10L # replicate CV 10 times
+CV_REPL <- 20L # replicate CV 20 times
 ALPHA_SEQUENCE <- c(0.5, 0.75, 1) # alpha parameters for EN-type estimators
 ZETA_SEQUENCE <- c(1, 2)  # sequence of zeta parameters for adaptive estimators
 NUMERIC_EPS <- 1e-6
@@ -42,6 +42,7 @@ PENSE_BDP <- 1/3  # desired breakdown point
 
 ## Determine the parallelization (threading or multiple processes)
 if (args$ncores > 1L) {
+  args$total_ncores <- args$ncores
   if (pense:::.k_multithreading_support) {
     args$cluster <- NULL
   } else {
@@ -50,6 +51,7 @@ if (args$ncores > 1L) {
   }
 } else {
   args$ncores <- 1L
+  args$total_ncores <- 1L
   args$cluster <- NULL
 }
 
@@ -186,6 +188,7 @@ for (p in SIM_P) {
         mscale_bdp = PENSE_BDP,
         ncores = args$ncores,
         cl = args$cluster,
+        en_algo_opts = en_algo_opts,
         eps = NUMERIC_EPS,
         cache_path = job_cache_path,
         log_indent = 1)
@@ -205,6 +208,7 @@ for (p in SIM_P) {
         ncores = args$ncores,
         cl = args$cluster,
         eps = NUMERIC_EPS,
+        en_algo_opts = en_algo_opts,
         cache_path = job_cache_path,
         log_indent = 1)
 
@@ -215,6 +219,7 @@ for (p in SIM_P) {
         seed = args$job,
         cv_k = CV_K,
         cv_repl = CV_REPL,
+        ncores = args$total_ncores,
         cache_path = job_cache_path,
         log_indent = 1)
 
@@ -226,6 +231,7 @@ for (p in SIM_P) {
         cv_k = CV_K,
         cv_repl = CV_REPL,
         cache_path = job_cache_path,
+        ncores = args$total_ncores,
         penalty = 'SCAD',
         log_indent = 1)
 

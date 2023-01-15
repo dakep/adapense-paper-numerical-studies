@@ -46,7 +46,7 @@ To run the R script using 4 CPUs, for example, the script is called from the com
 Rscript real_data_analysis-full_data.R --ncores 4
 ```
 
-The script takes ~50 CPU hours to compute and accepts the arguments `--ncores` (the number of CPUs to use in parallel) and `--results-dir` (the path where result file *full_estimates.rda* will be stored).
+The script takes ~2 CPU hours to compute and accepts the arguments `--ncores` (the number of CPUs to use in parallel) and `--results-dir` (the path where result file *full_estimates.rda* will be stored).
 By default, the result file is saved under *results/real_da*, and the folder is already populated with the result file computed for the manuscript: *results/real_da/full_estimates.rda*.
 
 #### Estimating the prediction accuracy

@@ -192,9 +192,11 @@ ggplot_theme <- function(base_size = 12, base_family = '') {
           axis.text = element_text(size = rel(0.7)),
           axis.title.y = element_text(vjust = 1),
           axis.title.x = element_text(vjust = 0),
-          panel.grid.major = element_line(color = 'gray30', size = rel(0.5), linetype='dotted'),
+          panel.grid.major = element_line(color = 'gray30', linewidth = rel(0.5),
+                                          linetype='dotted'),
           panel.grid.minor = element_blank(),
-          strip.background = element_rect(fill = '#ffffff', color = 'gray50', size = 0.3),
+          strip.background = element_rect(fill = '#ffffff', color = 'gray50',
+                                          linewidth = 0.3),
           strip.text = element_text(size = rel(0.75)),
           panel.border = element_rect(color = 'gray50', size = 0.3),
           legend.background = element_blank())

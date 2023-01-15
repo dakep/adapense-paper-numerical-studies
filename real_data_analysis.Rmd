@@ -76,6 +76,8 @@ extract_test_pred <- function (estimates, .id = NULL) {
                zeta = x$zeta %||% NA_real_,
                alpha = x$alpha %||% NA_real_, 
                bdp = x$bdp %||% NA_real_,
+               duration = x$duration_all_zeta %||% x$duration_all_alpha %||%
+                 NA_real_,
                nnz = sum(abs(x$beta) > .Machine$double.eps))
       }
     } else {
@@ -177,22 +179,19 @@ cv_results %>%
 
 ```{r compute-prediction_accuracy}
 pred_acc <- cv_results %>% 
-  filter(cv_type == 'se' | method == 'I-LAMM', !is.na(method)) %>%
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'), !is.na(method)) %>%
   group_by(seed, method) %>%
   summarize(pred_err = tau_size(glass_y[obs_index] - pred), 
             pred_err_orig = tau_size(glass_y_orig[obs_index] - exp(pred)),
             .groups = 'drop')
 ```
 
-I-LAMM has a median prediction accuracy of `r median(filter(pred_acc, method == 'I-LAMM')$pred_err)` (`r median(filter(pred_acc, method == 'I-LAMM')$pred_err_orig)` on the original scale).
+I-LAMM with LASSO penalty has a median prediction accuracy of `r median(filter(pred_acc, method == 'I-LAMM')$pred_err)` (`r median(filter(pred_acc, method == 'I-LAMM')$pred_err_orig)` on the original scale).
+With the SCAD penalty, I-LAMM has a median prediction accuracy of `r median(filter(pred_acc, method == 'I-LAMM (SCAD)')$pred_err)` (`r median(filter(pred_acc, method == 'I-LAMM (SCAD)')$pred_err_orig)` on the original scale).
 
 ```{r prediction_performance-log, fig.width=5, fig.height=3, out.width='66%', fig.align='center'}
 pred_perf_plot <- pred_acc %>% 
-  filter(method != 'I-LAMM') %>%
-  pivot_longer(starts_with('pred_err'), names_to = 'scale', values_to = 'pred_err') %>%
-  mutate(scale = recode(scale, 
-                        pred_err = 'log scale [log % w/w]', 
-                        pred_err_orig = 'original scale [% w/w]')) %>% 
+  filter(!str_starts(method, 'I-LAMM')) %>%
   ggplot(aes(x = method, y = pred_err, 
              fill = method, color = method, alpha = method, shape = method)) +
   geom_boxplot(notch = TRUE, outlier.shape = NA) +
@@ -204,7 +203,8 @@ pred_perf_plot <- pred_acc %>%
                          values = c('Ada. MM' = '#444444',
                                     'Ada. PENSE' = '#444444',
                                     'Ada. EN' = '#444444',
-                                    STYLE_COLOR[c('PENSE', 'MM', 'EN', 'I-LAMM')])) +
+                                    STYLE_COLOR[c('PENSE', 'MM', 'EN', 'I-LAMM',
+                                                  'I-LAMM (SCAD)')])) +
   scale_alpha_manual(guide = 'none',
                      values = c('Ada. MM' = 1,
                                 'Ada. PENSE' = 1,
@@ -212,14 +212,22 @@ pred_perf_plot <- pred_acc %>%
                                 'PENSE' = 0.25,
                                 'MM' = 0.25,
                                 'I-LAMM' = 1,
+                                'I-LAMM (SCAD)' = 1,
                                 'EN' = .25)) +
   scale_shape_manual(guide = 'none', values = STYLE_SHAPE) +
   scale_x_discrete(labels = function (lbl) { str_replace_all(lbl, fixed(' '), '\n')}) +
-  facet_wrap(~ scale, scales = 'free') +
+  # facet_wrap(~ scale, scales = 'free') +
   labs(y = expression(paste(tau, '-scale of prediction errors')), x = NULL, fill = NULL) +
   ggplot_theme(base_size = 12)
 
 pred_perf_plot
+```
+
+### Computation time
+
+```{r computation-time}
+cv_results %>% 
+  ggplot(aes(y = duration))
 ```
 
 ## Fit to full data set
@@ -248,6 +256,7 @@ nz_freqs <- extract_nz_freqs(full_estimates$adapense$cv_se, 'Ada. PENSE') %>%
   full_join(extract_nz_freqs(full_estimates$mm$cv_se, 'MM')) %>% 
   full_join(extract_nz_freqs(full_estimates$en$cv_se, 'EN')) %>% 
   full_join(extract_nz_freqs(full_estimates$ilamm, 'I-LAMM')) %>%
+  full_join(extract_nz_freqs(full_estimates$ilamm, 'I-LAMM (SCAD)')) %>%
   arrange(freq_index) %>% 
   select(-freq_index)
 ```
@@ -299,7 +308,7 @@ fitted_vs_obs_plot <- ggplot(fitted_vs_obs_data,
                                              ' [log % w/w]')),
                      breaks = seq(-4, 1, by = 1)) +
   scale_x_continuous(name = expression(
-    paste('Obs. conc. of ', P[2], O[5], ' [log % w/w]')),
+    paste('Observed concentration of ', P[2], O[5], ' [log % w/w]')),
     breaks = seq(-4, 1, by = 1),
     minor_breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
     sec.axis = dup_axis(
@@ -324,13 +333,13 @@ fitted_vs_obs_plot
 ## Combined in a single plot
 
 ```{r combined, out.width='100%', fig.width=7, fig.height=3}
-pdf("../adapense-paper/figures/glass-combined.pdf", width = 7, height = 3)
+# pdf("../adapense-paper/figures/glass-combined.pdf", width = 7, height = 3)
 grid.arrange(pred_perf_plot + labs(title = "(a) Prediction accuracy"),
              fitted_vs_obs_plot + labs(title = "(b) Fitted vs. observed"),
              layout_matrix = matrix(c(1, 1, 2, 3), nrow = 2, ncol = 2),
-             widths = grid::unit(c(0.68, 0.32), "npc"),
+             widths = grid::unit(c(0.5, 0.5), "npc"),
              heights = grid::unit(c(0.9, 0.1), "npc"))
-dev.off()
+# dev.off()
 ```
 
 ## Appendix -- not part of the manuscript
