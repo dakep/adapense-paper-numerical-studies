@@ -91,6 +91,7 @@ if (!dir.exists(args$results_dir)) {
   dir.create(args$results_dir, recursive = TRUE, mode = '0700')
 }
 
+## Use the LARS algorithm for all settings
 en_algo_opts <- en_lars_options()
 
 ## Run all combinations for the given seed

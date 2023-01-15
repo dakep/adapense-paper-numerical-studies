@@ -23,7 +23,7 @@ source('utilities.R')
 
 ## Simulation settings to consider
 SIM_P <- 2^6 # number of predictors
-SIM_N <- c(100, 200, 400, 800) # number of observations
+SIM_N <- c(10, 15, 20, 25)^2 # number of observations
 SIM_RESID_DIST <- 'stable(alpha = 1.33, beta = 0)'  # error distributions
 SIM_CONT_PROP <- 0 # contamination proportion
 
@@ -32,9 +32,9 @@ CACHE_PATH <- file.path(args$results_dir, 'cache')
 
 ## Estimator settings
 CV_K <- 5L # use 5-fold cross-validation
-CV_REPL <- 10L # replicate CV 10 times
+CV_REPL <- 20L # replicate CV 10 times
 ALPHA_SEQUENCE <- 0.75 # alpha parameters for EN-type estimators
-ZETA_SEQUENCE <- 1  # sequence of zeta parameters for adaptive estimators
+ZETA_SEQUENCE <- 2  # sequence of zeta parameters for adaptive estimators
 NUMERIC_EPS <- 1e-6
 PENALTY_LEVELS <- 50  # number of penalty levels to consider
 PENSE_INITIAL_PENALTY_LEVELS <- 10 # number of penalty levels where initial estimates are computed
@@ -43,6 +43,7 @@ PENSE_BDP <- 1/3  # desired breakdown point
 
 ## Determine the parallelization (threading or multiple processes)
 if (args$ncores > 1L) {
+  args$total_ncores <- args$ncores
   if (pense:::.k_multithreading_support) {
     args$cluster <- NULL
   } else {
@@ -50,9 +51,11 @@ if (args$ncores > 1L) {
     args$ncores <- 1L
   }
 } else {
+  args$total_ncores <- 1L
   args$ncores <- 1L
   args$cluster <- NULL
 }
+
 
 #' Generate Data for Scenario 3
 #'
@@ -89,6 +92,9 @@ if (!dir.exists(args$results_dir)) {
   dir.create(args$results_dir, recursive = TRUE, mode = '0700')
 }
 
+## Use the LARS algorithm for all settings
+en_algo_opts <- en_lars_options()
+
 ## Run all combinations for the given seed
 for (n in SIM_N) {
   job_id <- sprintf('s=%05d-n=%05d', args$job, n)
@@ -102,7 +108,6 @@ for (n in SIM_N) {
   if (!dir.exists(job_cache_path)) {
     dir.create(job_cache_path, recursive = TRUE, mode = '0700')
   }
-
 
   print_log("Computing estimates for job with id %s.", job_id)
   # Generate data
@@ -141,6 +146,7 @@ for (n in SIM_N) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
+    en_algo_opts = en_algo_opts,
     cache_path = job_cache_path,
     penalty_loadings = NULL,
     log_indent = 1)
@@ -161,6 +167,7 @@ for (n in SIM_N) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
+    en_algo_opts = en_algo_opts,
     cache_path = job_cache_path,
     log_indent = 1)
 
@@ -178,6 +185,7 @@ for (n in SIM_N) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
+    en_algo_opts = en_algo_opts,
     cache_path = job_cache_path,
     log_indent = 1)
 
@@ -196,6 +204,7 @@ for (n in SIM_N) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
+    en_algo_opts = en_algo_opts,
     cache_path = job_cache_path,
     log_indent = 1)
 
