@@ -366,9 +366,12 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
     lapply <- function (X, FUN, ...) {
       parallel::clusterApply(cl, x = X, fun = FUN, ...)
     }
+  } else {
+    cl <- numeric(1)
   }
 
-  print_log("Computing I-LAMM estimate (%s).", penalty, .indent = log_indent)
+  print_log("Computing I-LAMM (%s) estimate using %d nodes.",
+            penalty, length(cl), .indent = log_indent)
 
   try_catch({
     cache <- load_cache('%010d,%010d,%010d,%s', seed, cv_k, cv_repl, penalty,
