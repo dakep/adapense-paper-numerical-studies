@@ -130,7 +130,8 @@ for (job in unique(args$job)) {
       cl = args$cluster,
       eps = NUMERIC_EPS,
       cache_path = job_cache_path,
-      en_algo_opts = en_lars_options())
+      en_algo_opts = en_lars_options(),
+      log_indent = 1)
 
     ## Evaluate all estimates on the test set
     cv_results$estimates <- evaluate_estimate(cv_results$estimates,
