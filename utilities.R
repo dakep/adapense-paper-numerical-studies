@@ -380,25 +380,34 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
     } else {
       set.seed(seed)
       start <- proc.time()[["elapsed"]]
-      ilr <- ILAMM::cvNcvxHuberReg(x, y, nlambda = nlambda, penalty = penalty, nfolds = cv_k,
-                                   intercept = TRUE)
+      ilr <- ILAMM::cvNcvxHuberReg(x, y, nlambda = nlambda, penalty = penalty,
+                                   nfolds = cv_k, intercept = TRUE)
 
       if (cv_repl > 1L) {
-        mae <- lapply(seq_len(cv_repl - 1), function (., .x, .y, nlambda,
-                                               penalty, cv_k) {
+        mae <- lapply(seq_len(cv_repl - 1), function (repl, .x, .y, nlambda,
+                                                      penalty, cv_k, seed) {
+          # We set permute twice (once with the given seed,
+          # and once with the CV replication, to ensure different
+          # permutations for different seeds.
+          set.seed(seed)
           perm <- sample.int(length(.y))
+          set.seed(repl)
+          perm <- sample(perm)
           ILAMM::cvNcvxHuberReg(.x[perm, ], .y[perm], nlambda = nlambda,
                                 penalty = penalty,
                                 nfolds = cv_k, intercept = TRUE)$mae
-        }, .x = x, .y = y, nlambda = nlambda, penalty = penalty, cv_k = cv_k)
+        }, .x = x, .y = y, nlambda = nlambda, penalty = penalty, cv_k = cv_k,
+        seed = seed)
 
-        mae <- array(c(ilr$mae, unlist(mae, recursive = FALSE, use.names = FALSE)),
+        mae <- array(c(unlist(mae, recursive = FALSE, use.names = FALSE),
+                       ilr$mae),
                      dim = c(dim(ilr$mae), cv_repl))
 
         mae_stat <- apply(mae, c(1, 2), function (x) {
           c(mean = mean(x), sd = sd(x))
         })
-        best_hp <- arrayInd(which.min(mae_stat['mean', , , drop = TRUE]), dim(mae_stat)[-1L])
+        best_hp <- arrayInd(which.min(mae_stat['mean', , , drop = TRUE]),
+                            dim(mae_stat)[-1L])
         repl_ilr <- ILAMM::ncvxHuberReg(x, y, intercept = TRUE,
                                         penalty = penalty,
                                         lambda = ilr$lambdaSeq[[best_hp[[1]]]],
