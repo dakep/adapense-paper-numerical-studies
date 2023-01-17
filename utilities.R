@@ -77,7 +77,7 @@ compute_adapense_cv <- function (..., cv_k, seed, alpha, retain_initial, cache_p
     })
   })
   duration_all_alpha <- sum(vapply(all_alpha_results, FUN.VALUE = numeric(1),
-                                   FUN = `[[`, 'duration'))
+                                   FUN = safe_get, 'duration', NA_real_))
 
   # Select the best alpha value
   try_catch({
@@ -188,7 +188,7 @@ compute_adammest_cv <- function (..., pense_ridge, bdp, seed, alpha, cache_path,
     })
   })
   duration_all_alpha <- sum(vapply(all_alpha_results, FUN.VALUE = numeric(1),
-                                   FUN = `[[`, 'duration'))
+                                   FUN = safe_get, 'duration', NA_real_))
 
   try_catch({
     # Select the best alpha value
@@ -514,7 +514,7 @@ comp_glmnet <- function (x, y, alpha, nlambda, cv_k, seed, cache_path, cv_repl =
     }
   })
   duration_all_alpha <- sum(vapply(en_res, FUN.VALUE = numeric(1),
-                                   FUN = `[[`, 'duration'))
+                                   FUN = safe_get, 'duration', NA_real_))
 
   try_catch({
     res <- list(cv_min = get_best_estimate(en_res, 'min'),
@@ -715,4 +715,12 @@ try_catch <- function (expr, env = parent.frame()) {
                        })
                      NULL
                    })
+}
+
+safe_get <- function (x, name, .default) {
+  if (!is.null(x[[name]])) {
+    x[[name]]
+  } else {
+    .default
+  }
 }
