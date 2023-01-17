@@ -23,7 +23,7 @@ source('utilities.R')
 
 ## Simulation settings to consider
 SIM_P <- 2^6 # number of predictors
-SIM_N <- c(10, 15, 20, 25)^2 # number of observations
+SIM_N <- c(10, 15, 20, 25, 30)^2 # number of observations
 SIM_RESID_DIST <- 'stable(alpha = 1.33, beta = 0)'  # error distributions
 SIM_CONT_PROP <- 0 # contamination proportion
 
@@ -34,7 +34,7 @@ CACHE_PATH <- file.path(args$results_dir, 'cache')
 CV_K <- 5L # use 5-fold cross-validation
 CV_REPL <- 20L # replicate CV 10 times
 ALPHA_SEQUENCE <- 0.75 # alpha parameters for EN-type estimators
-ZETA_SEQUENCE <- 2  # sequence of zeta parameters for adaptive estimators
+ZETA_SEQUENCE <- 1  # sequence of zeta parameters for adaptive estimators
 NUMERIC_EPS <- 1e-6
 PENALTY_LEVELS <- 50  # number of penalty levels to consider
 PENSE_INITIAL_PENALTY_LEVELS <- 10 # number of penalty levels where initial estimates are computed
