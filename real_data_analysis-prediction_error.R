@@ -20,7 +20,7 @@ JOB_RESULTS_PATH <- file.path(args$results_dir, 'cv')
 
 ## General settings
 CV_K <- 6     # 6-fold cross-validation
-CV_REPL <- 10 # 10 replications of cross-validation
+CV_REPL <- 20 # 20 replications of cross-validation
 ALPHA_SEQUENCE <- c(0.5, 0.75, 1)  # sequence of alpha parameters for EN-type estimators
 ZETA_SEQUENCE <- c(1, 2)  # sequence of zeta parameters for adaptive estimators
 NUMERIC_EPS <- 1e-6  # numerical tolerance level
