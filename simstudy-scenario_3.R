@@ -215,6 +215,7 @@ for (n in SIM_N) {
     seed = args$job,
     cv_k = CV_K,
     cv_repl = CV_REPL,
+    ncores = args$total_ncores,
     cache_path = job_cache_path,
     log_indent = 1)
 
@@ -227,6 +228,7 @@ for (n in SIM_N) {
     cv_repl = CV_REPL,
     cache_path = job_cache_path,
     penalty = 'SCAD',
+    ncores = args$total_ncores,
     log_indent = 1)
 
   ## Compute LS-EN estimates
