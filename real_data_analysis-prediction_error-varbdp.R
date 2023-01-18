@@ -78,68 +78,69 @@ if (anyNA(args$job)) {
 
 for (job in unique(args$job)) {
   ## Determine seed and CV fold
-  job_seed <- 1L + (job - 1L) %/% CV_K
-  job_fold <- 1L + (job - 1L) %% CV_K
+  for (fold in seq_len(CV_K)) {
+    ## Split data into training and test set
+    set.seed(job)
+    cv_folds <- split(seq_along(glass_y), sample(rep_len(seq_len(CV_K), length(glass_y))))
 
-  ## Split data into training and test set
-  set.seed(job_seed)
-  cv_folds <- split(seq_along(glass_y), sample(rep_len(seq_len(CV_K), length(glass_y))))
+    test_glass_y <- glass_y[cv_folds[[fold]]]
+    test_glass_x <- glass_x[cv_folds[[fold]], ]
 
-  test_glass_y <- glass_y[cv_folds[[job_fold]]]
-  test_glass_x <- glass_x[cv_folds[[job_fold]], ]
+    train_glass_y <- glass_y[-cv_folds[[fold]]]
+    train_glass_x <- glass_x[-cv_folds[[fold]], ]
 
-  train_glass_y <- glass_y[-cv_folds[[job_fold]]]
-  train_glass_x <- glass_x[-cv_folds[[job_fold]], ]
+    for (bdp in PENSE_BDP) {
+      job_cache_path <- file.path(CACHE_PATH, 'cv',
+                                  sprintf('%04d-%02d-%04.0f', job, fold,
+                                          1000 * bdp))
+      if (!dir.exists(job_cache_path)) {
+        dir.create(job_cache_path, recursive = TRUE, mode = '0700')
+      }
 
-  for (bdp in PENSE_BDP) {
-    job_cache_path <- file.path(CACHE_PATH, 'cv',
-                                sprintf('%04d-%02d-%04d', job_seed, job_fold, 1000 * bdp))
-    if (!dir.exists(job_cache_path)) {
-      dir.create(job_cache_path, recursive = TRUE, mode = '0700')
-    }
-
-    print_log('Computing prediction errors for bdp %f in job %d (seed: %03d, fold: %d)',
-              bdp, job, job_seed, job_fold)
-    ## Set up the result structure
-    cv_results <- list(
-      job = list(
-        id = job,
+      print_log('Computing prediction errors for bdp %f in job %d (seed: %03d, fold: %d)',
+                bdp, job, job, fold)
+      ## Set up the result structure
+      cv_results <- list(
+        job = list(
+          id = job,
+          bdp = bdp,
+          seed = job,
+          fold = fold,
+          test_fold = cv_folds[[fold]]
+        ),
+        estimates = list()
+      )
+      ## Compute adaptive PENSE estimates
+      cv_results$estimates$adapense <- compute_adapense_cv_zeta(
+        y = train_glass_y, x = train_glass_x,
+        nlambda = PENALTY_LEVELS,
+        nlambda_enpy = PENSE_INITIAL_PENALTY_LEVELS,
+        lambda_min_ratio = c(5e-2, 4e-4),
+        lambda_min_ratio_prelim = 1e-2,
+        seed = job,
+        alpha = ALPHA_SEQUENCE,
+        zeta_seq = ZETA_SEQUENCE,
+        cv_repl = CV_REPL,
+        cv_k = CV_K,
         bdp = bdp,
-        seed = job_seed,
-        fold = job_fold,
-        test_fold = cv_folds[[job_fold]]
-      ),
-      estimates = list()
-    )
-    ## Compute adaptive PENSE estimates
-    cv_results$estimates$adapense <- compute_adapense_cv_zeta(
-      y = train_glass_y, x = train_glass_x,
-      nlambda = PENALTY_LEVELS,
-      nlambda_enpy = PENSE_INITIAL_PENALTY_LEVELS,
-      lambda_min_ratio = c(5e-2, 4e-4),
-      lambda_min_ratio_prelim = 1e-2,
-      seed = job_seed,
-      alpha = ALPHA_SEQUENCE,
-      zeta_seq = ZETA_SEQUENCE,
-      cv_repl = CV_REPL,
-      cv_k = CV_K,
-      bdp = bdp,
-      fit_all = c('min', 'se'),
-      retain_initial = PENSE_RETAIN_INITIAL_CANDIDATES,
-      ncores = args$ncores,
-      cl = args$cluster,
-      eps = NUMERIC_EPS,
-      cache_path = job_cache_path,
-      en_algo_opts = en_lars_options(),
-      log_indent = 1)
+        fit_all = c('min', 'se'),
+        retain_initial = PENSE_RETAIN_INITIAL_CANDIDATES,
+        ncores = args$ncores,
+        cl = args$cluster,
+        eps = NUMERIC_EPS,
+        cache_path = job_cache_path,
+        en_algo_opts = en_lars_options(),
+        log_indent = 1)
 
-    ## Evaluate all estimates on the test set
-    cv_results$estimates <- evaluate_estimate(cv_results$estimates,
-                                              test_x = test_glass_x,
-                                              test_y = test_glass_y)
-    ## Save results
-    saveRDS(cv_results, file = file.path(JOB_RESULTS_PATH,
-                                         sprintf('%04d-%02d-%04d.rds',
-                                                 job_seed, job_fold, bdp)))
+      ## Evaluate all estimates on the test set
+      cv_results$estimates <- evaluate_estimate(cv_results$estimates,
+                                                test_x = test_glass_x,
+                                                test_y = test_glass_y)
+      ## Save results
+      saveRDS(cv_results, file = file.path(JOB_RESULTS_PATH,
+                                           sprintf('%04d-%02d-%03.0f.rds',
+                                                   job, fold,
+                                                   1000 * bdp)))
+    }
   }
 }
