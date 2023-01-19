@@ -77,12 +77,12 @@ if (anyNA(args$job)) {
 }
 
 for (job in unique(args$job)) {
-  ## Determine seed and CV fold
-  for (fold in seq_len(CV_K)) {
-    ## Split data into training and test set
-    set.seed(job)
-    cv_folds <- split(seq_along(glass_y), sample(rep_len(seq_len(CV_K), length(glass_y))))
+  ## Split data into training and test set
+  set.seed(job)
+  cv_folds <- split(seq_along(glass_y),
+                    sample(rep_len(seq_len(CV_K), length(glass_y))))
 
+  for (fold in seq_len(CV_K)) {
     test_glass_y <- glass_y[cv_folds[[fold]]]
     test_glass_x <- glass_x[cv_folds[[fold]], ]
 
@@ -97,8 +97,8 @@ for (job in unique(args$job)) {
         dir.create(job_cache_path, recursive = TRUE, mode = '0700')
       }
 
-      print_log('Computing prediction errors for bdp %f in job %d (seed: %03d, fold: %d)',
-                bdp, job, job, fold)
+      print_log('Computing prediction errors for bdp %f in job %d (fold: %d)',
+                bdp, job, fold)
       ## Set up the result structure
       cv_results <- list(
         job = list(
@@ -117,7 +117,7 @@ for (job in unique(args$job)) {
         nlambda_enpy = PENSE_INITIAL_PENALTY_LEVELS,
         lambda_min_ratio = c(5e-2, 4e-4),
         lambda_min_ratio_prelim = 1e-2,
-        seed = job,
+        seed = job * CV_K + fold,
         alpha = ALPHA_SEQUENCE,
         zeta_seq = ZETA_SEQUENCE,
         cv_repl = CV_REPL,
