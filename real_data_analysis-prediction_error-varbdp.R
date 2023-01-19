@@ -32,7 +32,8 @@ PENALTY_LEVELS <- 50  # number of penalty levels to consider
 ## Settings for PENSE and adaptive PENSE
 PENSE_INITIAL_PENALTY_LEVELS <- 10
 PENSE_RETAIN_INITIAL_CANDIDATES <- 25
-PENSE_BDP <- c(0.2, 0.28, 0.33, 0.4)  # 30-60 potential outliers
+PENSE_BDP <- c(0.1, 0.2, 0.28, 0.33, 0.4)  # 15-60 potential outliers in each
+                                           # outer CV fold.
 
 ## Determine the parallelization (threading or multiple processes)
 if (args$ncores > 1L) {

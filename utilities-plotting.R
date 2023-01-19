@@ -198,7 +198,7 @@ ggplot_theme <- function(base_size = 12, base_family = '') {
           strip.background = element_rect(fill = '#ffffff', color = 'gray50',
                                           linewidth = 0.3),
           strip.text = element_text(size = rel(0.75)),
-          panel.border = element_rect(color = 'gray50', size = 0.3),
+          panel.border = element_rect(color = 'gray50', linewidth = 0.3),
           legend.background = element_blank())
 }
 

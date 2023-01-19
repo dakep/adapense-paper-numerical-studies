@@ -389,9 +389,9 @@ compute_ilamm <- function (x, y, nlambda, cv_k, seed, cache_path, cv_repl = 1,
       if (cv_repl > 1L) {
         mae <- lapply(seq_len(cv_repl - 1), function (repl, .x, .y, nlambda,
                                                       penalty, cv_k, seed) {
-          # We set permute twice (once with the given seed,
-          # and once with the CV replication, to ensure different
-          # permutations for different seeds.
+          # We permute with 2 different seeds
+          # (first with the given seed, then with the replication)
+          # to get different permutations for different seeds.
           set.seed(seed)
           perm <- sample.int(length(.y))
           set.seed(repl)

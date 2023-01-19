@@ -29,10 +29,11 @@ PENALTY_LEVELS <- 50  # number of penalty levels to consider
 ## Settings for PENSE and adaptive PENSE
 PENSE_INITIAL_PENALTY_LEVELS <- 10
 PENSE_RETAIN_INITIAL_CANDIDATES <- 25
-PENSE_BDP <- 0.28  # ~50 obs
+PENSE_BDP <- 0.28  # 42 obs in each nested CV fold
 
 ## Determine the parallelization (threading or multiple processes)
 if (args$ncores > 1L) {
+  args$total_ncores <- args$ncores
   if (pense:::.k_multithreading_support) {
     args$cluster <- NULL
   } else {
@@ -40,6 +41,7 @@ if (args$ncores > 1L) {
     args$ncores <- 1L
   }
 } else {
+  args$total_ncores <- 1L
   args$ncores <- 1L
   args$cluster <- NULL
 }
@@ -148,8 +150,8 @@ for (job in unique(args$job)) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
-    cache_path = job_cache_path,
-    en_algo_opts = en_lars_options())
+    en_algo_opts = en_lars_options(),
+    cache_path = job_cache_path)
 
   ## Compute MM estimates from the scale estimated via PENSE-Ridge
   cv_results$estimates$mm <- compute_adammest_cv(
@@ -166,8 +168,8 @@ for (job in unique(args$job)) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
-    cache_path = job_cache_path,
-    en_algo_opts = en_lars_options())
+    en_algo_opts = en_lars_options(),
+    cache_path = job_cache_path)
 
   ## Compute adaptive MM estimates
   cv_results$estimates$adamm <- compute_adammest_cv_zeta(
@@ -185,6 +187,7 @@ for (job in unique(args$job)) {
     ncores = args$ncores,
     cl = args$cluster,
     eps = NUMERIC_EPS,
+    en_algo_opts = en_lars_options(),
     cache_path = job_cache_path)
 
   ## Compute ILAMM estimates
@@ -194,6 +197,7 @@ for (job in unique(args$job)) {
     seed = job_seed,
     cv_k = CV_K,
     cv_repl = CV_REPL,
+    ncores = args$total_ncores,
     cache_path = job_cache_path)
 
   ## Compute ILAMM (SCAD) estimates
@@ -204,6 +208,7 @@ for (job in unique(args$job)) {
     cv_k = CV_K,
     cv_repl = CV_REPL,
     penalty = 'SCAD',
+    ncores = args$total_ncores,
     cache_path = job_cache_path)
 
   ## Compute LS-EN estimates

@@ -92,6 +92,11 @@ sbatch \
   real_data_analysis-slurm_cv.sh
 ```
 
+The script *real_data_analysis-prediction_error-varbdp.R* estimates the prediction error of adaptive PENSE for varying breakdown points.
+It can be run like the script *real_data_analysis-prediction_error.R*, except that it is separated into only 50 tasks, one per seed.
+A single tasks requires at most 36 CPU hours.
+
+
 #### Re-creating the figures and tables
 
 The file `real_data_analysis.Rmd` re-creates all plots and other results reported in the manuscript.
@@ -120,7 +125,7 @@ Rscript simstudy-scenario_1.R --ncores 4 --job 15 --
 ```
 
 One job requires approximately 70 CPU hours for scenario 1.
-Scenario 2 takes about 15 CPU hours.
+Scenario 2 takes less than 60 CPU hours.
 By default, the script uses the result path *results/simstudy*, and in this case the result files are stored under *results/simstudy/scenario_01/{job_setting_id}.rds*, where *{job_setting_id}* is a unique identifier for the job and setting.
 
 On HPC systems using the SLURM workload manager, the results for can be replicated with
@@ -145,8 +150,21 @@ For example, to re-compute results for the 22nd replication, the script would be
 Rscript simstudy-good_leverage.R --ncores 4 --job 22 --
 ```
 
-This job takes approximately 5 CPU hours.
+This job takes up to 36 CPU hours.
 Result files are saved under *results/simstudy/good_leverage*.
+
+#### Estimation accuracy
+
+The results pertaining to increasing estimation accuracy with increasing $n$ can be reproduced with the script *simstudy-scenario_3.R*.
+It can be run just like the other scripts for the simulation study with jobs 1 -- 50.
+For example, to re-compute results for the 22nd replication, the script would be run from the command line as follows:
+
+```sh
+Rscript simstudy-scenario_3.R --ncores 4 --job 22 --
+```
+
+This job takes up to 55 CPU hours.
+Result files are saved under *results/simstudy/scenario_03*.
 
 #### Re-creating the figures and tables
 

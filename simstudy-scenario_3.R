@@ -23,7 +23,7 @@ source('utilities.R')
 
 ## Simulation settings to consider
 SIM_P <- 2^6 # number of predictors
-SIM_N <- c(10, 15, 20, 25, 30)^2 # number of observations
+SIM_N <- c(10, 15, 20, 25)^2 # number of observations
 SIM_RESID_DIST <- 'stable(alpha = 1.33, beta = 0)'  # error distributions
 SIM_CONT_PROP <- 0 # contamination proportion
 
