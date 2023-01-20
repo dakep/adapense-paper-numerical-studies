@@ -25,7 +25,7 @@ PENALTY_LEVELS <- 50  # number of penalty levels to consider
 ## Settings for PENSE and adaptive PENSE
 PENSE_INITIAL_PENALTY_LEVELS <- 10
 PENSE_RETAIN_INITIAL_CANDIDATES <- 25
-PENSE_BDP <- 0.23  # 42 obs
+PENSE_BDP <- 0.28  # ~50 obs
 
 ## Determine the parallelization (threading or multiple processes)
 if (args$ncores > 1L) {
