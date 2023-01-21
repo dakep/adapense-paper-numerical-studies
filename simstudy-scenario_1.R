@@ -224,16 +224,19 @@ for (p in SIM_P) {
         log_indent = 1)
 
       ## Compute ILAMM (SCAD) estimates
-      cv_results$estimates$ilamm_scad <- compute_ilamm(
-        y = simdat$y, x = simdat$x,
-        nlambda = PENALTY_LEVELS,
-        seed = args$job,
-        cv_k = CV_K,
-        cv_repl = CV_REPL,
-        cache_path = job_cache_path,
-        ncores = args$total_ncores,
-        penalty = 'SCAD',
-        log_indent = 1)
+      ## (only for p < 400, as the computation time would be unreasonable)
+      if (isTRUE(p < 400)) {
+        cv_results$estimates$ilamm_scad <- compute_ilamm(
+          y = simdat$y, x = simdat$x,
+          nlambda = PENALTY_LEVELS,
+          seed = args$job,
+          cv_k = CV_K,
+          cv_repl = CV_REPL,
+          cache_path = job_cache_path,
+          ncores = args$total_ncores,
+          penalty = 'SCAD',
+          log_indent = 1)
+      }
 
       ## Compute LS-EN estimates
       cv_results$estimates$en <- comp_glmnet(
