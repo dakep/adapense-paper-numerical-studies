@@ -168,6 +168,7 @@ for (resid_dist in SIM_RESID_DIST) {
         ncores = args$ncores,
         cl = args$cluster,
         eps = NUMERIC_EPS,
+        max_solutions = 10L,
         en_algo_opts = en_algo_opts,
         cache_path = job_cache_path,
         log_indent = 1)
