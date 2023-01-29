@@ -1,6 +1,6 @@
 {
   "R": {
-    "Version": "4.1.2",
+    "Version": "4.2.1",
     "Repositories": [
       {
         "Name": "CRAN",
@@ -643,8 +643,8 @@
       "RemoteRepo": "pense-rpkg",
       "RemoteUsername": "dakep",
       "RemoteRef": "HEAD",
-      "RemoteSha": "c9651595fd34380c5d3fb1aa1459988f375f72b5",
-      "Hash": "51f528486a10fc2221e7234607687444",
+      "RemoteSha": "a138c39f805dfd352ee7fd5db1a8cf9a11f7db25",
+      "Hash": "63cb7c834f7ee2acda4a6cdbe32d4527",
       "Requirements": [
         "Matrix",
         "Rcpp",
