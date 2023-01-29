@@ -11,6 +11,7 @@ library(dplyr)
 library(tidyr)
 library(tibble)
 library(purrr)
+library(forcats)
 library(ggplot2)
 library(gridExtra)
 library(stringr)
@@ -19,6 +20,7 @@ library(magrittr)
 source('utilities-plotting.R')
 RESULTS_PATH <- file.path('results', 'real_da')
 CV_RESULTS_PATH <- file.path(RESULTS_PATH, 'cv')
+CV_VARBDP_RESULTS_PATH <- file.path(RESULTS_PATH, 'cv-varbdp')
 
 FIGURE_PATH <- file.path('figures')
 
@@ -76,8 +78,10 @@ extract_test_pred <- function (estimates, .id = NULL) {
                zeta = x$zeta %||% NA_real_,
                alpha = x$alpha %||% NA_real_, 
                bdp = x$bdp %||% NA_real_,
-               duration = x$duration_all_zeta %||% x$duration_all_alpha %||%
-                 NA_real_,
+               duration = (x$duration_all_zeta %||%
+                             x$duration_all_alpha %||%
+                             x$duration %||% NA_real_) +
+                 (x$duration_prelim %||% 0),
                nnz = sum(abs(x$beta) > .Machine$double.eps))
       }
     } else {
@@ -118,7 +122,24 @@ cv_results <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>%
     
     tibble(seed = job_res$job$seed,
            fold = job_res$job$fold,
-           obs_index = job_res$job$test_fold) %>% 
+           obs_index = job_res$job$test_fold) %>%
+      cbind(extract_test_pred(job_res$estimates))
+  }) %>%
+  mutate(method = str_replace(method, fixed('cv_'), ''),
+         cv_type = str_extract(method, '(se|min)$'),
+         method = str_remove(method, '_(se|min)$'),
+         method = recode_method(method)) %>% 
+  filter(seed <= 50, seed >= 1,
+         fold <= 6, fold >= 1)
+
+cv_varbdp_results <- list.files(CV_VARBDP_RESULTS_PATH, full.names = TRUE) %>% 
+  map_dfr(function (fname) {
+    job_res <- readRDS(fname)
+    
+    tibble(seed = job_res$job$seed,
+           bdp_nominal = job_res$job$bdp,
+           fold = job_res$job$fold,
+           obs_index = job_res$job$test_fold) %>%
       cbind(extract_test_pred(job_res$estimates))
   }) %>%
   mutate(method = str_replace(method, fixed('cv_'), ''),
@@ -131,30 +152,52 @@ cv_results <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>%
 
 
 ```{r check-cv-results, warning=TRUE}
-cv_results %>%
-  summarize(`Missing seeds` = paste(setdiff(seq_len(50), unique(seed)), collapse = ', '), 
-            .groups = 'drop') %>% 
-  filter(nzchar(`Missing seeds`)) %>% {
-    if (nrow(.) > 0L) {
-      warning("One or more seeds are missing:")
-      .
-    } else {
-      invisible(NULL)
+check_complete_cv <- function (results) {
+  results %>%
+    summarize(`Missing seeds` = paste(setdiff(seq_len(50), unique(seed)), 
+                                      collapse = ', '), 
+              .groups = 'drop') %>% 
+    filter(nzchar(`Missing seeds`)) %>% {
+      if (nrow(.) > 0L) {
+        warning("One or more seeds are missing:")
+        print(.)
+      } else {
+        invisible(NULL)
+      }
     }
-  }
+  
+  results %>%
+    group_by(seed) %>% 
+    summarize(`Missing folds` = paste(setdiff(seq_len(6), unique(fold)),
+                                      collapse = ', '), 
+              .groups = 'drop') %>% 
+    filter(nzchar(`Missing folds`)) %>% {
+      if (nrow(.) > 0L) {
+        warning("One or more seeds are missing folds:")
+        print(.)
+      } else {
+        invisible(NULL)
+      }
+    }
+}
 
-cv_results %>%
-  group_by(seed) %>% 
-  summarize(`Missing folds` = paste(setdiff(seq_len(6), unique(fold)), collapse = ', '), 
-            .groups = 'drop') %>% 
-  filter(nzchar(`Missing folds`)) %>% {
-    if (nrow(.) > 0L) {
-      warning("One or more seeds are missing folds:")
-      .
-    } else {
-      invisible(NULL)
+check_complete_cv(cv_results)
+check_complete_cv(cv_varbdp_results)
+
+cv_varbdp_results %>%
+    group_by(seed, fold) %>% 
+    summarize(`Missing bdps` = paste(setdiff(c(0.2, 0.28, 0.33, 0.4),
+                                             unique(bdp_nominal)),
+                                     collapse = ', '), 
+              .groups = 'drop') %>% 
+    filter(nzchar(`Missing bdps`)) %>% {
+      if (nrow(.) > 0L) {
+        warning("One or more folds are missing breakdown point settings.")
+        print(.)
+      } else {
+        invisible(NULL)
+      }
     }
-  }
 ```
 
 ### Number of non-zero coefficients
@@ -168,18 +211,35 @@ cv_results %>%
   summarize(`Mean` = mean(nnz),
             `SD` = sd(nnz),
             `Median` = median(nnz),
+            `Coefficient of variation` = SD / Mean,
+            IQR = IQR(nnz),
+            `IQR over median` = IQR / Median,
             Minimum = min(nnz),
             `5% quantile` = quantile(nnz, 0.05),
+            `25% quantile` = quantile(nnz, 0.25),
+            `75% quantile` = quantile(nnz, 0.75),
             `95% quantile` = quantile(nnz, 0.95),
             Maximum = max(nnz)) %>% 
-  arrange(`Mean`)
+  arrange(`Mean`) %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'))
+```
+
+```{r nnz-cv-boxplot, fig.width=7, fig.height=5, fig.align='center'}
+cv_results %>% 
+  filter(cv_type == 'se'| str_starts(method, 'I-LAMM'), !is.na(method)) %>% 
+  group_by(method, cv_type, seed, fold) %>% 
+  summarize(nnz = nnz[[1L]], .groups = 'drop') %>% 
+  ggplot(aes(x = method, y = nnz)) +
+  geom_boxplot() +
+  ggplot_theme(base_size = 12)
 ```
 
 ### Prediction accuracy
 
 ```{r compute-prediction_accuracy}
 pred_acc <- cv_results %>% 
-  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'), !is.na(method)) %>%
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'),
+         !is.na(method)) %>%
   group_by(seed, method) %>%
   summarize(pred_err = tau_size(glass_y[obs_index] - pred), 
             pred_err_orig = tau_size(glass_y_orig[obs_index] - exp(pred)),
@@ -196,8 +256,7 @@ pred_perf_plot <- pred_acc %>%
              fill = method, color = method, alpha = method, shape = method)) +
   geom_boxplot(notch = TRUE, outlier.shape = NA) +
   geom_point(position = position_jitter(width = 0.15, seed = 123), 
-             alpha = 0.4,
-             size = 1) +
+             alpha = 0.4, size = 1) +
   scale_fill_colorblind(guide = 'none', values = STYLE_COLOR) +
   scale_color_colorblind(guide = 'none',
                          values = c('Ada. MM' = '#444444',
@@ -216,18 +275,73 @@ pred_perf_plot <- pred_acc %>%
                                 'EN' = .25)) +
   scale_shape_manual(guide = 'none', values = STYLE_SHAPE) +
   scale_x_discrete(labels = function (lbl) { str_replace_all(lbl, fixed(' '), '\n')}) +
-  # facet_wrap(~ scale, scales = 'free') +
-  labs(y = expression(paste(tau, '-scale of prediction errors')), x = NULL, fill = NULL) +
+  labs(y = expression(paste(tau, '-scale of prediction errors [log % w/w]')), x = NULL, fill = NULL) +
   ggplot_theme(base_size = 12)
 
 pred_perf_plot
 ```
 
+#### Varying breakdown point
+
+```{r prediction-accuracy-varbdp, fig.width=5, fig.height=3, out.width='66%', fig.align='center'}
+cv_varbdp_results %>% 
+  filter(cv_type == 'se', !is.na(method)) %>%
+  group_by(method, seed, bdp_nominal) %>%
+  summarize(pred_err = tau_size(glass_y[obs_index] - pred), 
+            pred_err_orig = tau_size(glass_y_orig[obs_index] - exp(pred)),
+            .groups = 'drop') %>%
+  mutate(bdp = sprintf('%.0f%%', 100 * bdp_nominal)) %>% 
+  bind_rows(filter(pred_acc, method == 'Ada. MM') %>% 
+              mutate(bdp = '28%')) %>% 
+  mutate(bdp = fct_inorder(bdp)) %>% 
+  ggplot(aes(x = bdp, y = pred_err)) +
+  geom_boxplot(notch = TRUE, alpha = 0.4) +
+  labs(y = expression(paste(tau, '-scale of prediction errors [log % w/w]')), 
+       fill = NULL,
+       x = 'Breakdown point') +
+  facet_grid(cols = vars(method), space = 'free_x', scales = 'free_x') +
+  ggplot_theme(base_size = 12)
+```
+
 ### Computation time
 
-```{r computation-time}
+```{r computation-time, fig.width=5, fig.height=3, out.width='66%', fig.align='center'}
 cv_results %>% 
-  ggplot(aes(y = duration))
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM'), !is.na(method)) %>%
+  group_by(seed, method) %>%
+  summarize(duration = max(duration), .groups = 'drop') %>% 
+  ggplot(aes(x = method, y = duration / 60,
+             fill = method,
+             color = method,
+             alpha = method,
+             shape = method)) +
+  geom_point(position = position_jitter(width = 0.15, seed = 123), 
+             alpha = 0.4, size = 1) +
+  geom_boxplot(notch = TRUE, outlier.shape = NA) +
+  scale_fill_colorblind(guide = 'none', values = STYLE_COLOR) +
+  scale_color_colorblind(guide = 'none',
+                         values = c('Ada. MM' = '#444444',
+                                    'Ada. PENSE' = '#444444',
+                                    'Ada. EN' = '#444444',
+                                    STYLE_COLOR[c('PENSE', 'MM', 'EN', 'I-LAMM',
+                                                  'I-LAMM (SCAD)')])) +
+  scale_alpha_manual(guide = 'none',
+                     values = c('Ada. MM' = 1,
+                                'Ada. PENSE' = 1,
+                                'Ada. EN' = 1,
+                                'PENSE' = 0.25,
+                                'MM' = 0.25,
+                                'I-LAMM' = 1,
+                                'I-LAMM (SCAD)' = 1,
+                                'EN' = .25)) +
+  scale_shape_manual(guide = 'none', values = STYLE_SHAPE) +
+  scale_x_discrete(labels = function (lbl) { 
+    str_replace_all(lbl, fixed(' '), '\n')
+  }) +
+  coord_cartesian(expand = 0, ylim = c(0, 26),
+                  xlim = c(0.4, 8.6)) +
+  labs(y = "Computation time for each CV [min]", x = NULL, fill = NULL) +
+  ggplot_theme(base_size = 12)
 ```
 
 ## Fit to full data set
@@ -303,18 +417,15 @@ fitted_vs_obs_plot <- ggplot(fitted_vs_obs_data,
                aes(x = x, y = y, group = gr, color = color, fill = color),
                alpha = .1, linetype = '34') +
   geom_point(size = 2) +
-  geom_abline(slope = 1, intercept = 0, color = 'gray20', lty = '22', size = 2/3) +
-  scale_y_continuous(name = expression(paste('Fitted concentration of ', P[2], O[5], 
-                                             ' [log % w/w]')),
-                     breaks = seq(-4, 1, by = 1)) +
+  geom_abline(slope = 1, intercept = 0, color = 'gray20', lty = '22', 
+              linewidth = 2/3) +
+  scale_y_continuous(name = expression(
+    paste('Fitted concentration of ', P[2], O[5], ' [log % w/w]')),
+    breaks = seq(-4, 1, by = 1)) +
   scale_x_continuous(name = expression(
     paste('Observed concentration of ', P[2], O[5], ' [log % w/w]')),
     breaks = seq(-4, 1, by = 1),
-    minor_breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
-    sec.axis = dup_axis(
-      breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6)),
-      labels = c(0.02, 0.06, 0.2, 0.6, 2, 6),
-      name = expression(paste('Obs. conc. of ', P[2], O[5], ' [% w/w]')))) +
+    minor_breaks = log(c(0.02, 0.06, 0.2, 0.6, 2, 6))) +
   scale_alpha_manual(guide = 'none', values = c('inlier' = 0.5, 'outlier' = 1,
                                                 'outer_band' = 1)) +
   scale_color_colorblind(guide = 'none', values = c('inlier' = 'gray', 'outlier' = 'blue',
@@ -324,7 +435,8 @@ fitted_vs_obs_plot <- ggplot(fitted_vs_obs_data,
   coord_fixed(xlim = c(-4, 1), ylim = c(-3, 2)) +
   ggplot_theme(base_size = 12) +
   theme(panel.grid.minor.x = element_line(color = colorblind_cols('lightblue'), 
-                                          size = rel(0.5), linetype = "dotted"),
+                                          linewidth = rel(0.5), 
+                                          linetype = "dotted"),
         axis.title.x.bottom = element_text(hjust = 0.6))
 
 fitted_vs_obs_plot
@@ -333,13 +445,10 @@ fitted_vs_obs_plot
 ## Combined in a single plot
 
 ```{r combined, out.width='100%', fig.width=7, fig.height=3}
-# pdf("../adapense-paper/figures/glass-combined.pdf", width = 7, height = 3)
 grid.arrange(pred_perf_plot + labs(title = "(a) Prediction accuracy"),
              fitted_vs_obs_plot + labs(title = "(b) Fitted vs. observed"),
-             layout_matrix = matrix(c(1, 1, 2, 3), nrow = 2, ncol = 2),
-             widths = grid::unit(c(0.5, 0.5), "npc"),
-             heights = grid::unit(c(0.9, 0.1), "npc"))
-# dev.off()
+             layout_matrix = matrix(c(1, 2), nrow = 1, ncol = 2),
+             widths = grid::unit(c(0.5, 0.5), "npc"))
 ```
 
 ## Appendix -- not part of the manuscript
@@ -397,4 +506,62 @@ cv_curves %>%
   scale_color_identity() +
   scale_x_log10() +
   facet_wrap(~ method, scales = 'free_x')
+```
+
+### How often are the different frequencies selected
+
+```{r cv-nz-freq, fig.width=7, fig.height=5, out.width='100%'}
+extract_nz_freq <- function (estimates, .id = NULL) {
+  map2_dfr(estimates, names(estimates), function (x, suffix) {
+    if (is.list(x)) {
+      .id <- if (!is.null(.id)) {
+        paste(.id, suffix, sep = '_')
+      } else {
+        suffix
+      }
+      if (is.null(x$test_pred)) {
+        extract_nz_freq(x, .id)
+      } else {
+        tibble(method = .id, 
+               freq = colnames(glass_x),
+               beta = as.numeric(x$beta > .Machine$double.eps))
+      }
+    } else {
+      NULL
+    }
+  })
+}
+
+cv_nz_freq <- list.files(CV_RESULTS_PATH, full.names = TRUE) %>% 
+  map_dfr(function (fname) {
+    job_res <- readRDS(fname)
+    
+    tibble(seed = job_res$job$seed,
+           fold = job_res$job$fold) %>%
+      cbind(extract_nz_freq(job_res$estimates))
+  }) %>%
+  mutate(method = str_replace(method, fixed('cv_'), ''),
+         cv_type = str_extract(method, '(se|min)$'),
+         method = str_remove(method, '_(se|min)$'),
+         method = recode_method(method)) %>% 
+  filter(seed <= 50, seed >= 1,
+         fold <= 6, fold >= 1)
+
+full_selected <- nz_freqs %>% 
+  pivot_longer(cols = everything(), 
+               names_to = 'method',
+               values_to = 'freq') %>% 
+  filter(!is.na(freq)) %>% 
+  mutate(selected_full = 'yes')
+
+cv_nz_freq %>% 
+  filter(cv_type == 'se', !is.na(method)) %>% 
+  group_by(method, freq) %>% 
+  summarize(nz = sum(beta), .groups = 'drop') %>% 
+  ggplot(aes(x = freq, y = nz, fill = selected_full)) +
+  geom_col(fill = 'gray0') +
+  scale_x_discrete(breaks = NULL, labels = NULL) +
+  facet_grid(rows = vars(method)) +
+  labs(y = "# of times frequency is selected", x = 'Frequency', fill = NULL) +
+  ggplot_theme(base_size = 12)
 ```

@@ -112,8 +112,11 @@ extract_estimate_stats <- function (estimates, job, .id = NULL) {
                zeta = x$zeta %||% NA_real_,
                alpha = x$alpha %||% NA_real_, 
                bdp = x$bdp %||% NA_real_,
-               duration = x$duration_all_zeta %||% x$duration_all_alpha %||%
-                 NA_real_,
+               est_mse = sum((x$beta - job$true_beta)^2) + x$intercept^2,
+               duration = (x$duration_all_zeta %||%
+                             x$duration_all_alpha %||%
+                             x$duration %||% NA_real_) +
+                 (x$duration_prelim %||% 0),
                varsel = list(varsel_stats(x$beta, job)))
       }
     } else {
@@ -133,6 +136,7 @@ load_results <- function (path, s_fun) {
       job_res <- readRDS(fname)
       
       tibble(seed = job_res$seed,
+             n = job_res$settings$n,
              p = job_res$settings$p,
              s = floor(job_res$settings$s),
              resid_dist = job_res$settings$resid_dist,
@@ -255,7 +259,7 @@ plot_relative_pred_perf <- function (plot_d, ylim, guide, conf_level = 0.5, avg 
                fun.data = function (x) {
                  data.frame(y = avg(x))
                }) +
-    geom_errorbar(size = 2/3, width = 0.5,
+    geom_errorbar(linewidth = 2/3, width = 0.5,
                   position = position_dodge(width = 0.8), stat = 'summary',
                   fun.data = function (x) {
                     q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
@@ -320,7 +324,7 @@ plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE,
                fun.data = function (x) {
                  data.frame(y = avg(x))
                }) +
-    geom_errorbar(size = 2/3, width = 0.5,
+    geom_errorbar(linewidth = 2/3, width = 0.5,
                   position = position_dodge(width = 0.8), stat = 'summary',
                   fun.data = function (x) {
                     q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
@@ -349,6 +353,84 @@ plot_any_pct <- function (plot_d, what, ylab, guide, ylim = c(0, 1), pct = TRUE,
           legend.position = 'bottom',
           legend.margin = margin(),
           strip.text.y = element_text(size = 8))
+}
+
+plot_timing <- function (plot_d, ylim = NULL, guide, conf_level = 0.5,
+                         x = p_s_str,
+                         xlab = 'Number of predictors (thereof active)',
+                         y_breaks = waiver(),
+                         y_scale = 'log',
+                         y_unit = c('min', 'sec', 'hrs'),
+                         avg = median, base_size = 11) {
+  if (missing(guide)) {
+    guide <- guide_legend(title = 'Method',
+                          ncol = 2,
+                          keyheight = grid::unit(1.6, 'lines'),
+                          title.theme = element_text(face = 'bold', size = 9))
+  }
+  
+  y_unit <- match.arg(y_unit)
+  
+  avg <- match.fun(avg)
+  plot_d <- droplevels(plot_d) %>% 
+    rename(x = {{x}})
+  
+  minor_x_breaks <- if (nlevels(plot_d$x) > 1L) {
+    seq(1.5, nlevels(plot_d$x) - 0.5, by = 1)
+  } else {
+    numeric(0L)
+  }
+  
+  scale_y <- if (identical(y_scale, 'log')) {
+    scale_y_log10
+  } else if (identical(y_scale, 'sqrt')) {
+    scale_y_sqrt
+  } else {
+    scale_y_continuous
+  }
+  
+  unit_scale <- switch(y_unit, min = 60, hrs = 3600, 1)
+  
+  grouped_median <- function (x, group) {
+    median(x[group == max(group)], na.rm = TRUE)
+  }
+  
+  plot_d %>% 
+    mutate(method = fct_reorder2(method, duration, as.integer(x),
+                                .fun = grouped_median,
+                                .desc = TRUE)) %>% 
+    ggplot(aes(x = as.integer(x), y = duration / unit_scale,
+               color = method, shape = method, fill = method)) +
+    geom_point(size = 2.5, 
+               stat = 'summary',
+               fun.data = function (x) {
+                 data.frame(y = avg(x))
+               }) +
+    geom_line(linewidth = 2/3, 
+              stat = 'summary',
+              fun.data = function (x) {
+                data.frame(y = avg(x))
+              }) +
+    geom_linerange(linewidth = 2/3, 
+                   stat = 'summary',
+                   show.legend = FALSE,
+                   fun.data = function (x) {
+                     q <- quantile(x, probs = 0.5 + c(-0.5, 0.5) * conf_level[[1L]])
+                     data.frame(ymin = q[[1L]], ymax = q[[2L]])
+                   }) +
+    coord_cartesian(ylim = ylim) +
+    scale_color_colorblind(guide = guide, values = STYLE_COLOR) +
+    scale_fill_colorblind(guide = guide, values = STYLE_COLOR) +
+    scale_shape_manual(guide = guide, values = STYLE_SHAPE) +
+    scale_x_continuous(minor_breaks = minor_x_breaks,
+                       breaks = seq_len(nlevels(plot_d$x)),
+                       labels = levels(plot_d$x)) +
+    scale_y(breaks = y_breaks) +
+    labs(x = xlab,
+         y = sprintf("Total computation time [%s]", y_unit)) +
+    ggplot_theme(base_size = base_size) +
+    theme(legend.margin = margin(),
+          legend.position = 'right')
 }
 
 get_summary_stats <- function (x, what, best_direction = 1) {
@@ -407,15 +489,15 @@ print_summary_stats <- function (x, cols) {
 }
 ```
 
-## Scenario 1
+## Scenario 1 (moderate *n=200*)
 
-```{r scenario_1-load-results}
+```{r scenario_1-load-results, cache=TRUE}
 scenario_1 <- load_results(file.path(RESULTS_PATH, 'scenario_01'))
 ```
 
 ```{r scenario_1-check-results, warning=TRUE}
 any_missing(scenario_1$p, c(32, 128, 512), "p")
-any_missing(scenario_1$cont, c("No contamination", "10% contamination"), "contamination")
+any_missing(scenario_1$cont, c("No adverse contamination", "10% contamination"), "contamination")
 any_missing(scenario_1$resid_dist,
             c("Normal residuals", "Stable(1.33) residuals", "Cauchy residuals"), 
             "residual distribution")
@@ -503,15 +585,25 @@ scenario_1 %>%
   }
 ```
 
-## Scenario 2
+### Computation time
 
-```{r scenario_2-load-results}
+```{r scenario_1-timing, out.width='100%', fig.width=6, fig.height=2.75}
+scenario_1 %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
+  plot_timing(ylim = c(5/60, 300),
+              y_unit = 'min',
+              y_breaks = c(.1, 0.3, 1, 3, 10, 30, 100, 300))
+```
+
+## Scenario 2 (small *n=100*)
+
+```{r scenario_2-load-results, cache=TRUE}
 scenario_2 <- load_results(file.path(RESULTS_PATH, 'scenario_02'))
 ```
 
 ```{r scenario_2-check-results, warning=TRUE}
 any_missing(scenario_2$p, c(32, 64, 128), "p")
-any_missing(scenario_2$cont, c("No contamination", "25% contamination"), "contamination")
+any_missing(scenario_2$cont, c("No adverse contamination", "25% contamination"), "contamination")
 any_missing(scenario_2$resid_dist,
             c("Normal residuals", "Stable(1.33) residuals", "Cauchy residuals"), 
             "residual distribution")
@@ -544,7 +636,6 @@ scenario_2 %>%
   plot_relative_pred_perf(ylim = c(-0.2, 0.5))
 ```
 
-
 ### Variable selection performance
 
 ```{r scenario_2-mcc, out.width='100%', fig.width=7, fig.height=4.6}
@@ -575,16 +666,158 @@ scenario_2 %>%
   }
 ```
 
+```{r scenario_2-bad_adamm-sens_spec, out.width='100%', fig.width=9, fig.height=4}
+scenario_2 %>% 
+  filter(cv_type == 'se', method %in% c('Ada. PENSE', 'Ada. MM')) %>%
+  select(method, p_s_str, resid_dist, cont, seed, pred_err_tau_size, sens, spec) %>% 
+  drop_na() %>% 
+  pivot_wider(names_from = method, values_from = c(sens, spec, pred_err_tau_size)) %>% 
+  mutate(rel_pred = `pred_err_tau_size_Ada. MM` / `pred_err_tau_size_Ada. PENSE`) %>% 
+  filter(rel_pred > 1.2) %>% 
+  arrange(rel_pred) %>% 
+  # mutate(label = sprintf('%s\n(%d)',
+  #                        scales::label_percent(accuracy = 1)(rel_pred - 1),
+  #                        rank(rel_pred))) %>% 
+  mutate(label = sprintf('%.2f\n(%d)',
+                         rel_pred,
+                         rank(rel_pred))) %>% 
+  {
+    df <- .
+    
+    gd <- guide_legend(title = 'Rel. prediction error',
+                       direction = 'horizontal')
+    
+    sens <- ggplot(df, aes(y = `sens_Ada. PENSE`, 
+                           x = `sens_Ada. MM`,
+                           label = label)) +
+      geom_abline(slope = 1, intercept = 0, linetype = '22') +
+      geom_label(size = 2.5, 
+                 label.padding = unit(0.2, "lines"),
+                 label.r = unit(0.3, "lines"),
+                 label.size = 0.1) +
+      scale_x_continuous(labels = scales::label_percent(),
+                         limits = c(-0.05, 1.05), expand = c(0, 0)) +
+      scale_y_continuous(labels = scales::label_percent(),
+                         limits = c(-0.01, 1.05), expand = c(0, 0)) +
+      labs(title = "(a) Sensitivity",
+           x = 'Sensitivity of adaptive MM',
+           y = 'Sensitivity of adaptive PENSE') +
+      ggplot_theme(base_size = 12)
+
+    spec <- ggplot(df, aes(y = `spec_Ada. PENSE`, 
+                           x = `spec_Ada. MM`,
+                           label = label)) +
+      geom_abline(slope = 1, intercept = 0, linetype = '22') +
+      geom_label(size = 2.5, 
+                 label.padding = unit(0.2, "lines"),
+                 label.r = unit(0.3, "lines"),
+                 label.size = 0.1) +
+      labs(title = "(b) Specificity",
+           x = 'Specificity of adaptive MM',
+           y = 'Specificity of adaptive PENSE') +
+      scale_x_continuous(labels = scales::label_percent(),
+                         limits = c(-0.05, 1.05), expand = c(0, 0)) +
+      scale_y_continuous(labels = scales::label_percent(),
+                         limits = c(-0.01, 1.05), expand = c(0, 0)) +
+      ggplot_theme(base_size = 12) +
+      theme(legend.position = 'bottom')
+
+    grid.arrange(sens, spec,
+                 layout_matrix = matrix(1:2, ncol = 2))
+  }
+```
+
+### Computation time
+
+```{r scenario_2-timing, out.width='100%', fig.width=6, fig.height=2.75}
+scenario_2 %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
+  plot_timing()
+```
+
+## Scenario 3 (varying *n*)
+
+```{r scenario_3-load-results, cache=TRUE}
+scenario_3 <- load_results(file.path(RESULTS_PATH, 'scenario_03'))
+```
+
+```{r scenario_3-check-results, warning=TRUE}
+any_missing(scenario_3$n, c(10, 15, 20, 25)^2, "n")
+scenario_3 %>%
+  group_by(n, method, cv_type) %>% 
+  summarize(`Missing replications` = paste(setdiff(seq_len(50), seed), collapse = ', '), 
+            .groups = 'drop') %>% 
+  filter(nzchar(`Missing replications`)) %>% {
+    if (nrow(.) > 0L) {
+      warning("Several settings have more/less than 50 replications:")
+      .
+    } else {
+      invisible(NULL)
+    }
+  }
+```
+
+### Estimation error
+
+```{r scenario_3-est_error, out.width='66%', fig.width=5, fig.height=3}
+guide <- guide_legend(title = 'Method',
+                      nrow = 1,
+                      keyheight = grid::unit(1.6, 'lines'),
+                      title.theme = element_text(face = 'bold', size = 9))
+
+scenario_3 %>% 
+  # filter(cv_type == 'min' | str_starts(method, 'I-LAMM')) %>%
+  filter(method %in% c('Ada. PENSE', 'Ada. MM'), cv_type == 'se') %>%
+  group_by(n, method, cv_type) %>% 
+  summarize(avg = median(est_mse),
+            up = quantile(est_mse, 0.75),
+            lo = quantile(est_mse, 0.25),
+            .groups = 'drop') %>% 
+  ggplot(aes(x = n, 
+             y = avg, 
+             ymin = up,
+             ymax = lo,
+             color = method, shape = method, fill = method)) +
+  geom_linerange(linewidth = 2/3, alpha = 0.5, show.legend = FALSE) +
+  geom_point(size = 2.5) +
+  geom_line(linewidth = 2/3) +
+  coord_cartesian(ylim = c(0, 10)) +
+  scale_color_colorblind(guide = guide, values = STYLE_COLOR) +
+  scale_fill_colorblind(guide = guide, values = STYLE_COLOR) +
+  scale_shape_manual(guide = guide, values = STYLE_SHAPE) +
+  scale_x_sqrt(breaks = unique(scenario_3$n)) +
+  labs(x = "Number of observations",
+       y = "Mean squared estimation error") +
+  ggplot_theme(base_size = 11) +
+  theme(legend.margin = margin(),
+        legend.position = 'bottom')
+```
+
+### Computation time
+
+```{r scenario_3-timing, out.width='100%', fig.width=6, fig.height=2.75}
+scenario_3 %>% 
+  filter(cv_type == 'se' | str_starts(method, 'I-LAMM')) %>% 
+  mutate(n_str = as_factor(sprintf('%3d', n))) %>% 
+  plot_timing(x = n_str, 
+              xlab = 'Number of observations', 
+              ylim = c(0.03, 100),
+              y_breaks = c(0.1, 0.3, 1, 3, 10, 30, 100),
+              y_unit = 'min',
+              y_scale = 'log')
+```
+
+
 ## Good Leverage Points
 
-```{r good_leverage-load-results}
+```{r good_leverage-load-results, cache=TRUE}
 good_leverage <- load_results(file.path(RESULTS_PATH, 'good_leverage'))
 ```
 
 ```{r good_leverage-sens_spec, out.width='100%', fig.width=7, fig.height=3.5}
 good_leverage %>% 
   filter(cv_type == 'se' | str_starts(method, 'I-LAMM'),
-         method != 'Ada. MM', method != 'MM') %>% 
+         method != '--Ada. MM', method != 'MM') %>% 
   select(method, bad_lev_pos, ends_with('_cont')) %>%
   pivot_longer(ends_with('_cont'), names_to = c('what', 'cont'),
                names_pattern = '([senspc]+)_(.+)') %>% 

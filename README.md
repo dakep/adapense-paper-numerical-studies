@@ -46,7 +46,7 @@ To run the R script using 4 CPUs, for example, the script is called from the com
 Rscript real_data_analysis-full_data.R --ncores 4
 ```
 
-The script takes ~2 CPU hours to compute and accepts the arguments `--ncores` (the number of CPUs to use in parallel) and `--results-dir` (the path where result file *full_estimates.rda* will be stored).
+The script takes ~6 CPU hours to compute and accepts the arguments `--ncores` (the number of CPUs to use in parallel) and `--results-dir` (the path where result file *full_estimates.rda* will be stored).
 By default, the result file is saved under *results/real_da*, and the folder is already populated with the result file computed for the manuscript: *results/real_da/full_estimates.rda*.
 
 #### Estimating the prediction accuracy
@@ -94,7 +94,7 @@ sbatch \
 
 The script *real_data_analysis-prediction_error-varbdp.R* estimates the prediction error of adaptive PENSE for varying breakdown points.
 It can be run like the script *real_data_analysis-prediction_error.R*, except that it is separated into only 50 tasks, one per seed.
-A single tasks requires at most 36 CPU hours.
+A single tasks requires at most 35 CPU hours.
 
 
 #### Re-creating the figures and tables
@@ -113,9 +113,9 @@ This R markdown file reads the result files from the path *results/real_da*.
 ### Simulation study
 
 The simulation study consists of two main scenarios and the results concerning good leverage points.
-Results for the two main scenario are computed by two separate R scripts: *simstudy-scenario_1.R* and *simstudy-scenario_2.R*.
+Results for the three simulation scenarios are computed by separate R scripts: *simstudy-scenario_1.R*, *simstudy-scenario_2.R* and *simstudy-scenario_3.R*.
 They are almost identical, except for the differences in how the data is generated.
-The instructions below only reference the script for scenario 1, and results for scenario 2 can be re-created by the exact same steps (substituting all occurrences of `scenario_1` with `scenario_2`).
+The instructions below only reference the script for scenario 1, and results for scenarios 2 and 3 can be re-created by the exact same steps (substituting all occurrences of `scenario_1` with `scenario_2` or `scenario_3`).
 
 The script *simstudy-scenario_1.R* computes all estimates for all settings for a single seed (i.e., a single replication).
 To compute the estimates for the 15th replication using 4 CPUs, for example, the script is called on the command line as follows:
@@ -124,8 +124,8 @@ To compute the estimates for the 15th replication using 4 CPUs, for example, the
 Rscript simstudy-scenario_1.R --ncores 4 --job 15 --
 ```
 
-One job requires approximately 70 CPU hours for scenario 1.
-Scenario 2 takes less than 60 CPU hours.
+One job requires approximately 480 CPU hours for scenario 1.
+Scenario 2 takes less than 60 CPU hours, scenario 3 less than 20 CPU hours.
 By default, the script uses the result path *results/simstudy*, and in this case the result files are stored under *results/simstudy/scenario_01/{job_setting_id}.rds*, where *{job_setting_id}* is a unique identifier for the job and setting.
 
 On HPC systems using the SLURM workload manager, the results for can be replicated with

@@ -33,7 +33,7 @@ STYLE_LINETYPE <- c('EN' = '22',
 #' @return factor with human readable strings in the correct order
 recode_cont <- function (x) {
   cont_str <- factor(if_else(x < .Machine$double.eps,
-                             "No contamination",
+                             "No adverse contamination",
                              sprintf("%.0f%% contamination", 100 * x)))
   fct_reorder(cont_str, x)
 }
@@ -182,7 +182,7 @@ ggplot_theme <- function(base_size = 12, base_family = '') {
 
   theme_bw(base_size = base_size, base_family = base_family) +
     theme(plot.title = element_text(size = rel(0.8), hjust = 0.5, face = 'bold'),
-          plot.margin = margin(0.2, 0.4, 0.2, 0.2, 'lines'),
+          plot.margin = margin(0.2, 0.4, 0.4, 0.2, 'lines'),
           panel.background = element_rect(fill = 'transparent', color = NA),
           plot.background = element_rect(fill = 'transparent', color = NA),
           legend.title = element_text(size = rel(0.75)),
